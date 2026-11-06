@@ -9,7 +9,16 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, Wallet } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  Wallet,
+  Copy,
+  ExternalLink,
+  ShieldCheck,
+  Check,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useAccount, useConnect, useSignMessage } from 'wagmi';
 import api from '@/lib/api';
@@ -97,7 +106,7 @@ export function IssuerWalletProvider({
         signature,
       });
       setRegistered(res.data?.data?.wallet_address ?? connected);
-      toast.success('Issuer wallet registered.');
+      toast.success('Issuer wallet registered successfully.');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } }; shortMessage?: string; message?: string };
       toast.error(e.response?.data?.message || e.shortMessage || e.message || 'Could not register wallet.');
@@ -220,34 +229,218 @@ export function IssuerWalletBanner() {
 /** Settings card: shows the registered wallet and lets the issuer replace it. */
 export function IssuerWalletCard() {
   const { registered, connected, loading, saving, matches, registerConnected } = useIssuerWallet();
+  const { connectors, connect, isPending } = useConnect();
+  const [copied, setCopied] = useState(false);
   const canChange = !!connected && connected !== registered;
 
+  const handleCopy = (address: string) => {
+    navigator.clipboard.writeText(address);
+    setCopied(true);
+    toast.success('Wallet address copied to clipboard');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <div className="card p-6">
-      <h3 className="text-base font-bold text-ink">Issuer Wallet</h3>
-      <p className="mt-1 text-sm text-muted">
-        The only wallet allowed to deploy tokens, mint, freeze, unfreeze, pause and unpause for your account.
-      </p>
-      <div className="mt-4 rounded-lg border border-line bg-surface-header p-3">
-        <p className="text-xs text-muted">Registered wallet</p>
-        <p className="mt-1 break-all font-mono text-sm text-ink">
-          {loading ? 'Loading…' : registered ?? 'None registered'}
-        </p>
-        {registered && (
-          <p className={`mt-1 text-xs ${matches ? 'text-success' : 'text-warning'}`}>
-            {matches ? 'Connected in MetaMask' : 'Not the wallet currently connected'}
-          </p>
-        )}
+    <div className="relative overflow-hidden rounded-2xl border border-line bg-card p-5 sm:p-7 shadow-card transition-all duration-300 hover:border-accent/30">
+      {/* Background Ambient Glow */}
+      <div className="pointer-events-none absolute -right-20 -top-20 h-48 w-48 rounded-full bg-accent/5 blur-3xl" />
+
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-4 sm:pb-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent shadow-sm border border-accent/20">
+            <Wallet className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-bold text-ink">Issuer On-Chain Wallet</h3>
+              <span className="inline-flex items-center gap-1 rounded-full border border-accent/20 bg-accent-soft px-2 py-0.5 text-[10px] sm:text-xs font-semibold text-accent">
+                <ShieldCheck className="h-3 w-3" />
+                ERC-3643 Authority
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-muted">
+              The sole cryptographic address authorized to deploy contracts, mint, burn, pause, and freeze tokens.
+            </p>
+          </div>
+        </div>
+
+        {/* Live Status Pill */}
+        <div className="self-start sm:self-auto">
+          {loading ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-header px-3 py-1 text-xs text-muted">
+              <Loader2 className="h-3 w-3 animate-spin" /> Verifying…
+            </span>
+          ) : registered ? (
+            matches ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success-subtle/30 px-3 py-1 text-xs font-semibold text-success">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+                </span>
+                Active & Verified
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning-subtle/30 px-3 py-1 text-xs font-semibold text-warning">
+                <AlertTriangle className="h-3 w-3" />
+                Mismatch in MetaMask
+              </span>
+            )
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-header px-3 py-1 text-xs font-medium text-muted">
+              Not Registered
+            </span>
+          )}
+        </div>
       </div>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button onClick={registerConnected} disabled={saving || !canChange} className="btn-primary">
-          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-          {registered ? 'Change to connected wallet' : 'Register connected wallet'}
-        </button>
-        {!connected && <span className="text-xs text-muted">Connect MetaMask, switch to the new account, then click.</span>}
-        {connected && !canChange && registered && (
-          <span className="text-xs text-muted">To change, switch to a different account in MetaMask first.</span>
-        )}
+
+      {/* Wallet Details Grid */}
+      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* Registered Issuer Wallet */}
+        <div className="rounded-xl border border-line bg-surface-header p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-muted">Registered Issuer Wallet</span>
+            {registered && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleCopy(registered)}
+                  className="rounded-lg p-1.5 text-muted hover:bg-card hover:text-ink transition-colors"
+                  title="Copy registered address"
+                >
+                  {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+                </button>
+                <a
+                  href={`https://etherscan.io/address/${registered}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg p-1.5 text-muted hover:bg-card hover:text-ink transition-colors"
+                  title="View on block explorer"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-2 min-h-[2.5rem] flex items-center">
+            {loading ? (
+              <div className="flex items-center gap-2 text-xs text-muted">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Reading registry state…</span>
+              </div>
+            ) : registered ? (
+              <p className="break-all font-mono text-xs sm:text-sm font-semibold text-ink select-all">
+                {registered}
+              </p>
+            ) : (
+              <p className="text-xs text-muted italic">
+                No issuer wallet registered yet. Connect your MetaMask wallet to register.
+              </p>
+            )}
+          </div>
+
+          <div className="mt-2.5 flex items-center justify-between border-t border-line/60 pt-2 text-[11px]">
+            <span className="text-muted">Status:</span>
+            {registered ? (
+              <span className={`font-semibold ${matches ? 'text-success' : 'text-warning'}`}>
+                {matches ? '✓ Connected in MetaMask' : '⚠ Connected wallet does not match'}
+              </span>
+            ) : (
+              <span className="text-muted">Awaiting Registration</span>
+            )}
+          </div>
+        </div>
+
+        {/* Connected Wallet (MetaMask) */}
+        <div className="rounded-xl border border-line bg-surface-header p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-muted">Currently Connected in MetaMask</span>
+            {connected && (
+              <button
+                type="button"
+                onClick={() => handleCopy(connected)}
+                className="rounded-lg p-1.5 text-muted hover:bg-card hover:text-ink transition-colors"
+                title="Copy connected address"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="mt-2 min-h-[2.5rem] flex items-center">
+            {connected ? (
+              <p className="break-all font-mono text-xs sm:text-sm font-semibold text-ink select-all">
+                {connected}
+              </p>
+            ) : (
+              <div className="flex items-center gap-2 text-xs text-muted">
+                <span>MetaMask wallet not connected.</span>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-2.5 flex items-center justify-between border-t border-line/60 pt-2 text-[11px]">
+            <span className="text-muted">Session:</span>
+            {connected ? (
+              <span className="font-semibold text-accent">Active MetaMask Session</span>
+            ) : (
+              <span className="text-muted">Disconnected</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Action Footer */}
+      <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-line/80 bg-surface-alt p-3.5">
+        <div className="text-xs text-muted">
+          {!connected ? (
+            <span>Connect your MetaMask wallet, switch to your signing account, then register.</span>
+          ) : connected && !canChange && registered ? (
+            <span className="text-success font-medium">
+              ✓ Connected wallet matches your registered issuer authority.
+            </span>
+          ) : (
+            <span>Sign a cryptographic challenge with MetaMask to register this address.</span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {!connected ? (
+            <button
+              type="button"
+              onClick={() => connectors[0] && connect({ connector: connectors[0] })}
+              disabled={isPending || !connectors[0]}
+              className="btn-primary w-full sm:w-auto text-xs py-2 px-4"
+            >
+              {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wallet className="h-3.5 w-3.5" />}
+              Connect MetaMask
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={registerConnected}
+              disabled={saving || !canChange}
+              className={`btn w-full sm:w-auto text-xs py-2 px-4 font-semibold ${
+                canChange
+                  ? 'btn-primary shadow-sm shadow-accent/20'
+                  : 'btn-secondary opacity-60 cursor-not-allowed'
+              }`}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Signing & Registering…
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {registered ? 'Change to Connected Wallet' : 'Register Connected Wallet'}
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
