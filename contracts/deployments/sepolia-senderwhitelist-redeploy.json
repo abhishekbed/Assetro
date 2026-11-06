@@ -1,0 +1,10 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployer": "0xea2Fe42e772784807C33DF5FD7D25D7021244048",
+  "contract": "SenderWhitelistModule",
+  "address": "0xfCD0cAEe7c479d7Caa25FB8cA4BCc7Eb35dcE7bE",
+  "supersedes": "0xDbe7b51eAbB79D8e5AD39477e6439d13F35550C2",
+  "reason": "Empty whitelist now means 'no restriction' instead of blocking every transfer. The superseded instance default-denied all transfers when bound without senders configured.",
+  "status": "complete"
+}

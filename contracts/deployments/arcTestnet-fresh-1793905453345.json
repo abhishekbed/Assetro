@@ -1,0 +1,33 @@
+{
+  "network": "arcTestnet",
+  "chainId": 5042002,
+  "deployer": "0xea2Fe42e772784807C33DF5FD7D25D7021244048",
+  "deployedAt": "2026-11-05T19:04:13.345Z",
+  "contracts": {
+    "TokenImplementation": "0x02c5D573B49bD7CBECB2D3Ba79521cDF60852544",
+    "CTRImplementation": "0x37054315b7014f3557ae5E97FF0353877C40fBB8",
+    "IRImplementation": "0xd915b7555eCD00364B586970Ed434c7653Ade150",
+    "IRSImplementation": "0xc6Ca0f74B4FB54dc5DDC77EF6FD7Af561309c1bc",
+    "TIRImplementation": "0x00eF395BC1fdf654F88d729aB954c688b6Bc6851",
+    "MCImplementation": "0x6fcec2DD753f4Bd84F1BD4e925Be5f178Df8f705",
+    "TREXImplementationAuthority": "0x15318022fE5CBE0b3EaDaC8cc6C7609E9A6a2731",
+    "IdentityImplementation": "0xFa7feB9cA36b6c796c2bd2B043A724B2Cb7cD598",
+    "OIDImplementationAuthority": "0xEe0A72481E8D27a55E1B522f35A8a3FA685a37f3",
+    "IdFactory": "0x7bA79147c004407B1Bd5c818811e33E9758784bD",
+    "TREXFactory": "0xC7B09D600Acc59e4152001cC60294E956F7f3063",
+    "IAFactory": "0xB22EC47d8Cf39D254a3d3523f3469b74806CdB39",
+    "ClaimIssuer": "0xD32A88A32a9BC07BE6A5f57D31Ef7d9D5d4b6679",
+    "TREXGateway": "0xB8d5281674FF3a138De9E9c580BbaAfF657c7890",
+    "OIDGateway": "0x9EA187CdBF75e4399EC94d13F7FBF3Ca76264462",
+    "CountryRestrictModule": "0xb2511745e54Af174637Bb1327A0CdEC462A0B4e8",
+    "MaxHolderModule": "0x19318d8048EeE366832857D4699c1a943Add8f61",
+    "TransferWindowModule": "0x75d24cFfccb49A25Fb46De91bb1710F26937Fb3E",
+    "SupplyLimitModule": "0x95E56b296Beb3c3103a6306a084De2310769EDe3",
+    "MaxBalanceModule": "0x7Fc7f39f5DEfc5640C60094dEaAEAC43aD14f208",
+    "DayMonthLimitsModule": "0xfF107c35F005a1e43c87fE109572D2bAB423aadf",
+    "ExchangeMonthlyLimitsModule": "0x2B462f281aA78DbB2241DBad78133Ca8BbA36762",
+    "TransferFeeModule": "0x1a29BB99A732C8240Fb804460f51b1dd019d2939",
+    "SenderWhitelistModule": "0x4b2F297E01169a4B6E696d6e329cE22A58f67845"
+  },
+  "status": "complete"
+}

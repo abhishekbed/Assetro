@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: assetro-platform
+  labels:
+    app.kubernetes.io/name: assetro-platform
+    app.kubernetes.io/part-of: assetro
+    app.kubernetes.io/managed-by: kubectl

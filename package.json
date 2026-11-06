@@ -1,0 +1,34 @@
+{
+  "name": "assetro-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Enterprise-grade Tokenization & Digital Asset Compliance Platform",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "turbo dev",
+    "start": "turbo start",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "clean": "turbo clean && rm -rf node_modules",
+    "db:migrate": "cd database && npm run migrate",
+    "db:seed": "cd database && npm run seed",
+    "docker:up": "docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/docker-compose.yml up -d",
+    "docker:down": "docker compose --env-file infrastructure/docker/.env -f infrastructure/docker/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@assetro/shared-utils",
+  "version": "0.1.0",
+  "description": "Shared utility functions for the Assetro tokenization platform",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "license": "UNLICENSED"
+}

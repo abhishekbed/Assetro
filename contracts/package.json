@@ -1,0 +1,39 @@
+{
+  "name": "@assetro/contracts",
+  "version": "1.0.0",
+  "description": "Assetro tokenization platform smart contracts using ERC-3643 (T-REX) standard",
+  "license": "MIT",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "test:coverage": "hardhat coverage",
+    "test:gas": "REPORT_GAS=true hardhat test",
+    "deploy:factory:localhost": "hardhat run scripts/deploy-factory.ts --network localhost",
+    "deploy:factory:sepolia": "hardhat run scripts/deploy-factory.ts --network sepolia",
+    "deploy:factory:polygon": "hardhat run scripts/deploy-factory.ts --network polygon",
+    "deploy:arc-testnet": "hardhat run scripts/deploy-fresh-all.ts --network arcTestnet",
+    "deploy:token:localhost": "hardhat run scripts/deploy-token.ts --network localhost",
+    "deploy:token:sepolia": "hardhat run scripts/deploy-token.ts --network sepolia",
+    "deploy:token:polygon": "hardhat run scripts/deploy-token.ts --network polygon",
+    "verify": "hardhat run scripts/verify-contracts.ts",
+    "clean": "hardhat clean",
+    "node": "hardhat node"
+  },
+  "dependencies": {
+    "ethers": "^6.13.0"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@onchain-id/solidity": "^2.2.1",
+    "@openzeppelin/contracts": "^4.9.3",
+    "@openzeppelin/contracts-upgradeable": "^4.9.3",
+    "@types/node": "^20.11.0",
+    "dotenv": "^16.4.0",
+    "hardhat": "^2.22.0",
+    "hardhat-gas-reporter": "^1.0.10",
+    "solidity-coverage": "^0.8.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.0"
+  }
+}

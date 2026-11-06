@@ -1,0 +1,16 @@
+{
+  "_comment": "Placeholder ABI - replace with compiled artifact from Hardhat (ERC-3643 Trusted Issuers Registry)",
+  "abi": [
+    "function addTrustedIssuer(address issuer, uint256[] calldata claimTopics)",
+    "function removeTrustedIssuer(address issuer)",
+    "function updateIssuerClaimTopics(address issuer, uint256[] calldata claimTopics)",
+    "function isTrustedIssuer(address issuer) view returns (bool)",
+    "function getTrustedIssuers() view returns (address[])",
+    "function getTrustedIssuerClaimTopics(address issuer) view returns (uint256[])",
+    "function hasClaimTopic(address issuer, uint256 claimTopic) view returns (bool)",
+    "event TrustedIssuerAdded(address indexed issuer, uint256[] claimTopics)",
+    "event TrustedIssuerRemoved(address indexed issuer)",
+    "event ClaimTopicsUpdated(address indexed issuer, uint256[] claimTopics)"
+  ],
+  "bytecode": "0x"
+}

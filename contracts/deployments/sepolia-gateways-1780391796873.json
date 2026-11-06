@@ -1,0 +1,12 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployer": "0x64D2E12ACAFBfD3c0BFf5fbcCdbcA4b242FF49C1",
+  "deployedAt": "2026-06-02T09:16:36.873Z",
+  "contracts": {
+    "TREXFactory": "0x2c50461DF40dCb5B77FfD13BC8685F76f3598dc4",
+    "TREXGateway": "0xE38B7f92768329bA633D6bcF36f393e7818D9f08",
+    "IdFactory": "0x426E98F361B3CD424665eab7D81CccdF9fc1fe14",
+    "OIDGateway": "0xd5C978F7227763572d6f13826CEa12B8b3b0470F"
+  }
+}

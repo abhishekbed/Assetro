@@ -1,0 +1,21 @@
+{
+  "name": "@assetro/shared-types",
+  "version": "1.0.0",
+  "description": "Shared TypeScript type definitions for the Assetro tokenization platform",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "prebuild": "npm run clean",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

@@ -1,0 +1,22 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployer": "0x64D2E12ACAFBfD3c0BFf5fbcCdbcA4b242FF49C1",
+  "deployedAt": "2026-05-26T07:18:38.213Z",
+  "contracts": {
+    "TokenImplementation": "0x12A4674A54Ad9547803655F3A4688FfcEeec9b13",
+    "CTRImplementation": "0x4Da3892288a8f8e752368070ba5A140001318459",
+    "IRImplementation": "0xA67A805ca7e5837e76909035E000691e47788f10",
+    "IRSImplementation": "0x1b33091e200B5d743FdF17648ECa416ecf6319F9",
+    "TIRImplementation": "0xB3520dC5f874d7c12A5128068C07eAe845Bf892e",
+    "MCImplementation": "0x801F787B28E6a89c84C722A72798B7AB2821618A",
+    "TREXImplementationAuthority": "0xfF7b8cC9375B67758F14D782A6235c4D0B6d6dAa",
+    "IdentityImplementation": "0x20607Df54bB055586d8946294CB1b28754c8A000",
+    "OIDImplementationAuthority": "0xA5F0B6BaD81724C1BeC136F37f94590b638FF365",
+    "IdFactory": "0xcb066b1ec609001b9bfea186B8d8FdB41607D6f2",
+    "TREXFactory": "0x92e6CC99FFc8472715867388230B99332600641D",
+    "IAFactory": "0xc68a612f3502742e4dD3151A23F858C8287c7459",
+    "ClaimIssuer": "0x69ee75F1E4e65BE904209d2059582cba7B9A930d"
+  },
+  "status": "complete"
+}

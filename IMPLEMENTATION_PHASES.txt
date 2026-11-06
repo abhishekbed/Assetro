@@ -1,0 +1,1107 @@
+================================================================================
+  ASSETRO TOKENIZATION PLATFORM — PHASE-WISE IMPLEMENTATION PLAN
+  Based on: web-issuer, web-admin, web-investor, contracts, database, .env
+  Prepared: 2026-05-26
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  CURRENT STATE AUDIT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  CONTRACTS (apps/contracts/)  — STATUS: COMPLETE
+  ────────────────────────────────────────────────
+  ✅ Token.sol + TokenStorage.sol (ERC-3643 token)
+  ✅ IdentityRegistry.sol + IdentityRegistryStorage.sol
+  ✅ ClaimTopicsRegistry.sol + TrustedIssuersRegistry.sol
+  ✅ ModularCompliance.sol + CountryRestrictModule + MaxHolderModule
+  ✅ TransferWindowModule + TransferRestrictModule + TestModule
+  ✅ TREXFactory.sol + TREXGateway.sol
+  ✅ Full proxy suite (TokenProxy, IdentityRegistryProxy, etc.)
+  ✅ TREXImplementationAuthority.sol
+  ✅ AgentRole.sol + AgentRoleUpgradeable.sol
+  ✅ Legacy compliance modules (MaxBalance, DayMonthLimits, SupplyLimit, etc.)
+  MISSING: IdFactory.sol (ONCHAINID contract factory), ClaimIssuer.sol
+
+  DATABASE (database/)  — STATUS: COMPLETE
+  ─────────────────────────────────────────
+  ✅ public.tenants, public.supported_chains, public.super_admins
+  ✅ Per-tenant: users, tokens, compliance_rules, kyc_submissions,
+     kyc_documents, whitelist, cap_table, transactions, payments,
+     corporate_actions, vesting_schedules
+  MISSING: onchain_identities table, claim_topics table, api_keys table,
+           issuer_kyc table, token_documents table, transfer_approvals table
+
+  API (apps/api/)  — STATUS: PARTIALLY COMPLETE
+  ───────────────────────────────────────────────
+  ✅ auth module: login, register, JWT (HS256)
+  ✅ tokens module: CRUD, deploy-sync, sync-status, cap-table
+  ✅ compliance module: rules CRUD (on-chain + off-chain), whitelist, transfer check
+  ✅ kyc module: submit, document upload (S3), review (approve/reject)
+  ✅ payments module: Stripe checkout stub, webhook stub, payment history
+  ✅ admin module: tenants, audit-logs, analytics, issuer-leads
+  ✅ notifications module: email service stub
+  ✅ blockchain-service: provider, contract-interaction, event-listener,
+     transaction-manager, gas-estimator
+  MISSING: identity module (ONCHAINID deploy + claim issuance),
+           investments module, vesting module, force-transfer endpoint,
+           recovery endpoint, token-documents endpoint, 2FA endpoints,
+           websocket gateway, transfer-approval workflow
+
+  WEB-ISSUER (apps/web-issuer/)  — STATUS: MOSTLY COMPLETE
+  ─────────────────────────────────────────────────────────
+  ✅ login, token list, 5-step token create/deploy wizard
+  ✅ Token detail: deploy, mint, burn, pause/unpause, freeze/unfreeze
+  ✅ Compliance rules: country-restrict, investor-limit, time-based (on-chain)
+  ✅ Whitelist: add wallet to IdentityRegistry (registerIdentity on-chain)
+  ✅ Cap table view, investor list, KYC review (approve/reject/notes)
+  ✅ Corporate actions list + create pages (UI only, no execution)
+  ✅ Analytics page (stub)
+  ✅ Settings page
+  MISSING: Force Transfer modal, Token Recovery modal, Vesting Schedules
+           management, Corporate Actions execution (dividend/voting),
+           Analytics charts with real data, Token document upload,
+           Issuer organization KYC, Transfer check full reason codes,
+           Trusted Issuers Registry management UI
+
+  WEB-ADMIN (apps/web-admin/)  — STATUS: PARTIALLY COMPLETE
+  ──────────────────────────────────────────────────────────
+  ✅ login, dashboard (charts), tenant list/create/detail
+  ✅ Users list, audit logs, issuer leads
+  MISSING: Tenant billing/subscription management, API key management,
+           White-labeling config per tenant, System health monitoring,
+           Per-tenant token analytics, Tenant suspension controls
+
+  WEB-INVESTOR (apps/web-investor/)  — STATUS: FOUNDATION COMPLETE, NEEDS WIRING
+  ────────────────────────────────────────────────────────────────────────────────
+  ✅ login, register pages
+  ✅ Dashboard: portfolio value, KYC banner, recent orders, pie chart
+  ✅ Token marketplace: grid/list view, search, asset-type filter
+  ✅ Token detail: full info + sticky "Invest" buy widget (Stripe call)
+  ✅ KYC page: full submission form + document upload + status tracking
+  ✅ Portfolio: holdings table + pie chart allocation
+  ✅ Transactions: payment history with status filter
+  ✅ Documents: KYC document view/upload
+  ✅ Settings: profile, password change, notifications, wallet connect
+  ✅ InvestorPosition type (cap_table | payments source)
+  MISSING: Stripe payment completion → token allocation → mint pipeline,
+           On-chain balance reading (balanceOf from token contract),
+           P2P transfer initiation page, Vesting schedule view,
+           ONCHAINID identity status page, Transfer request page,
+           Real-time notification bell, 2FA setup in settings,
+           Accredited investor checkbox in KYC form,
+           Payment success/cancel pages fully wired
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 1 — ONCHAINID & INVESTOR IDENTITY LAYER
+  Duration: ~2 weeks  |  Priority: CRITICAL (everything depends on this)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  WHY CRITICAL:
+  The current whitelist page calls identityRegistry.registerIdentity() but
+  ERC-3643 spec requires each investor to have a deployed ONCHAINID smart
+  contract (ERC-734/ERC-735) with verified claims. Without this, the
+  compliance contract's canTransfer() will reject ALL transfers regardless
+  of whitelist status. This is the foundational gap that blocks everything.
+
+  1.1 — Smart Contracts
+  ─────────────────────
+  - Install @onchain-id/solidity: npm install @onchain-id/solidity
+  - Deploy IdFactory contract (creates ONCHAINID per investor)
+  - Deploy platform ClaimIssuer contract (acts as Trusted Issuer)
+  - Add env vars: CLAIM_ISSUER_ADDRESS, ID_FACTORY_ADDRESS,
+    CLAIM_ISSUER_PRIVATE_KEY
+  - Register ClaimIssuer in TrustedIssuersRegistry for each token suite
+  - Define claim topics in ClaimTopicsRegistry:
+    Topic 1 = KYC_APPROVED
+    Topic 2 = COUNTRY_OF_RESIDENCE (ISO numeric code)
+    Topic 3 = INVESTOR_CLASSIFICATION (retail/accredited/institutional)
+    Topic 4 = ACCREDITED_STATUS
+
+  1.2 — Database Migration
+  ────────────────────────
+  New migration: 006_identity_tables.sql
+  - Add to tenant schema: onchain_identities table
+    Columns: id, user_id, identity_contract_address, chain_id,
+    claim_topics_issued JSONB, registered_token_ids JSONB,
+    deployed_at, created_at, updated_at
+  - Add identity_contract_address column to users table
+  - Add claim_issuer_address to tokens table (which ClaimIssuer is trusted)
+
+  1.3 — API: New Identity Module
+  ────────────────────────────────
+  Create: apps/api/src/modules/identity/
+    identity.module.ts
+    services/
+      identity-deployment.service.ts
+        - deployIdentity(userId, walletAddress, chainId): calls IdFactory
+          createIdentity(walletAddress) via blockchain-service
+        - getOrDeployIdentity(userId, walletAddress, chainId): idempotent
+      claim-issuance.service.ts
+        - issueClaim(identityAddress, claimTopic, claimData): signs claim
+          with ClaimIssuer private key, calls identity.addClaim()
+        - issueKycClaims(identityAddress, kycData): issues all 4 claims at once
+        - revokeClaim(identityAddress, claimId): on KYC expiry or rejection
+      identity-registry.service.ts
+        - registerInToken(identityAddress, walletAddress, countryCode,
+          tokenId): calls identityRegistry.registerIdentity() on-chain
+        - isRegistered(walletAddress, tokenId): check registration status
+    controllers/identity.controller.ts
+      GET  /identity/me               — investor's ONCHAINID status
+      POST /identity/deploy           — deploy ONCHAINID for user
+      POST /identity/register-in-token — register in specific token IR
+      GET  /identity/:tokenId/status  — check if user eligible for token
+    entities/onchain-identity.entity.ts
+
+  1.4 — KYC Approval Pipeline Fix
+  ────────────────────────────────
+  Modify: apps/api/src/modules/kyc/services/kyc.service.ts
+  In approveSubmission() method, after setting status = 'approved', add:
+    Step 1: Call identityDeploymentService.getOrDeployIdentity()
+    Step 2: Call claimIssuanceService.issueKycClaims() with:
+            - KYC_APPROVED = true
+            - COUNTRY = ISO numeric from kyc.country_of_residence
+            - INVESTOR_CLASSIFICATION = kyc.investor_type
+            - ACCREDITED_STATUS = kyc.is_accredited
+    Step 3: Save identity_contract_address to users table
+    Step 4: Return identity address in approval response
+
+  1.5 — Whitelist Page Fix (web-issuer)
+  ───────────────────────────────────────
+  File: apps/web-issuer/src/app/(dashboard)/tokens/[id]/whitelist/page.tsx
+  Changes:
+  - Before calling identityRegistry.registerIdentity():
+    a. Fetch investor's ONCHAINID address via GET /identity/me or
+       GET /kyc/submissions to find KYC status
+    b. If no ONCHAINID: show warning "Investor must have approved KYC first"
+    c. If ONCHAINID exists: pass identityContractAddress (not raw wallet)
+       to registerIdentity(walletAddress, identityAddress, countryCode)
+  - Show ONCHAINID address column in whitelist table
+  - Show "Identity: 0x..." badge on each whitelisted entry
+
+  1.6 — Transfer Check Enhancement
+  ─────────────────────────────────
+  File: apps/web-issuer/src/app/(dashboard)/tokens/[id]/transfer-check/page.tsx
+  - Wire actual token.canTransfer(from, to, amount) call on-chain
+  - Map ERC-3643 error codes to human readable reasons:
+    0  = Transfer allowed
+    16 = Sender not whitelisted
+    17 = Receiver not whitelisted
+    18 = Country restriction on sender
+    19 = Country restriction on receiver
+    20 = Investor limit reached
+    21 = Token paused
+    22 = Sender address frozen
+  - Show full breakdown: off-chain rules check + on-chain canTransfer result
+
+  1.7 — web-investor: Identity Status Page
+  ─────────────────────────────────────────
+  New page: apps/web-investor/src/app/(dashboard)/identity/page.tsx
+  Shows:
+  - ONCHAINID contract address (if deployed)
+  - Claims issued: KYC_APPROVED, COUNTRY, INVESTOR_TYPE, ACCREDITED
+  - "Deploy Identity" button (triggered automatically on KYC approval)
+  - Status: Not Created / Deploying / Active / Claims Expired
+  Add to Sidebar navigation under KYC section
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 2 — PAYMENTS → TOKEN ALLOCATION → MINT PIPELINE
+  Duration: ~1.5 weeks  |  Priority: CRITICAL (core business flow)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  WHY CRITICAL:
+  The buy widget in web-investor calls POST /payments/checkout and redirects
+  to Stripe session URL, but there is no webhook handler that mints tokens
+  after payment succeeds. Money moves but tokens are never issued.
+
+  2.1 — Stripe Checkout Completion
+  ─────────────────────────────────
+  File: apps/api/src/modules/payments/services/stripe.service.ts
+  - createCheckoutSession(tokenId, amount, userId, walletAddress):
+    Creates Stripe session with:
+    success_url: NEXT_PUBLIC_INVESTOR_URL/payment/success?session_id={CHECKOUT_SESSION_ID}
+    cancel_url:  NEXT_PUBLIC_INVESTOR_URL/payment/cancel
+    metadata: { token_id, token_amount, user_id, wallet_address }
+    line_items: [ { price_data: { unit_amount: price*100, currency: 'usd' },
+                    quantity: tokenAmount } ]
+  - Store payment record in DB with status 'pending' and session_id
+
+  2.2 — Stripe Webhook Handler
+  ─────────────────────────────
+  File: apps/api/src/modules/payments/controllers/webhook.controller.ts
+  Handle event: checkout.session.completed
+    Step 1: Verify Stripe webhook signature (STRIPE_WEBHOOK_SECRET)
+    Step 2: Extract metadata: token_id, token_amount, user_id, wallet_address
+    Step 3: Update payment record status = 'processing'
+    Step 4: Check investor's ONCHAINID is deployed and registered in token IR
+    Step 5: On failure: update payment status = 'failed', notify issuer
+    Step 6: if paymnet confirmed: update payment status = 'completed',
+            and store payment details in issuer side in token
+
+  2.3 — issuer-Side Minting Service
+  ───────────────────────────────────
+  
+  - show all investor list in issuer side 
+  - if issuer confirm payment after show mint button
+  - Load token from DB, get tokenAddress + chainId
+  - onceissuer click on mint button add investor linked wallet address and buy token auto add at mint time
+  - Wait for confirmation, update cap_table entry
+  - Emit payment.minted event for notification service
+
+  2.4 — Payment Success/Cancel Pages (web-investor)
+  ────────────────────────────────────────────────────
+  File: apps/web-investor/src/app/(dashboard)/payment/success/page.tsx
+  - Read ?session_id from URL
+  - Poll GET /payments/session/:sessionId until status = 'completed'
+  - Show: "Payment confirmed. X tokens of SYMBOL minted to your wallet."
+  - Show transaction hash with block explorer link
+  - Link to Portfolio page
+
+  File: apps/web-investor/src/app/(dashboard)/payment/cancel/page.tsx
+  - Show: "Payment cancelled. No charges were made."
+  - Link back to token detail
+
+  2.5 — Cap Table Auto-Sync
+  ──────────────────────────
+  File: apps/api/src/modules/tokens/services/cap-table.service.ts
+  - updateOrInsertEntry(tokenId, walletAddress, userId, newBalance):
+    Upsert cap_table row, recalculate percentage for all holders
+  - Called from: webhook after mint confirmed + event-listener Transfer events
+
+  2.6 — Wire Transfer Payment Path
+  ─────────────────────────────────
+  New page: apps/web-investor/src/app/(dashboard)/payment/wire/page.tsx
+  - Show bank details (from token metadata or platform config)
+  - Show unique reference number = PAY-{paymentId}
+  - Status: "Pending bank confirmation"
+
+  In web-issuer token detail — add "Confirm Wire Payment" button:
+  - Lists pending wire payments for that token
+  - Issuer clicks confirm → triggers same mint pipeline as Stripe webhook
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 3 — WEB-INVESTOR COMPLETION
+  Duration: ~2 weeks  |  Priority: HIGH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  3.1 — On-Chain Balance Reading
+  ────────────────────────────────
+  File: apps/web-investor/src/lib/investor-positions.ts
+  - Add fetchOnchainBalance(tokenAddress, walletAddress, chainId, decimals)
+    using publicClient.readContract({ functionName: 'balanceOf' })
+  File: apps/web-investor/src/app/(dashboard)/portfolio/page.tsx
+  - After loading positions from API, fetch on-chain balance for each
+    deployed token where investor has a wallet connected
+  - Show: "Off-chain: X | On-chain: Y" if they differ (sync warning)
+  - Show is_frozen status from token.isFrozen(walletAddress) read
+
+  3.2 — KYC Form Enhancement
+  ────────────────────────────
+  File: apps/web-investor/src/app/(dashboard)/kyc/page.tsx
+  - Add fields:
+    - Investor type: Individual / Institutional (radio)
+    - Accredited investor: Yes / No (checkbox with tooltip explanation)
+    - Tax ID / PAN number
+    - Phone number
+    - For Institutional: company name, registration number, country of incorporation
+  - Separate form sections for Individual vs Institutional
+  - On submit: include investorType, isAccredited in payload
+  - These fields feed directly into ONCHAINID claim data (Phase 1)
+
+  3.3 — P2P Transfer Page
+  ─────────────────────────
+  New page: apps/web-investor/src/app/(dashboard)/transfer/page.tsx
+  - Token selector (dropdown from investor holdings)
+  - Recipient wallet address input with ENS lookup
+  - Amount input (max = current on-chain balance)
+  - "Check Transfer" button: calls GET /compliance/check-transfer
+    Shows: "Transfer allowed" or reason why blocked
+  - "Send Transfer" button (only if check passes):
+    Calls token.transfer(to, amount) via wagmi writeContract
+    Requires MetaMask/WalletConnect signature
+  - Transaction history table for sent/received transfers
+  Add /transfer to Sidebar navigation
+
+  3.4 — Vesting Schedule View
+  ────────────────────────────
+  New page: apps/web-investor/src/app/(dashboard)/vesting/page.tsx
+  - List all vesting schedules for current user from GET /vesting/me
+  - Each card: token name, total allocated, released, next release date
+  - Visual progress bar: vested amount vs total
+  - Timeline of upcoming releases
+  - "Claim Vested Tokens" button (triggers release from issuer server or
+    investor wallet depending on vesting contract type)
+  Add /vesting to Sidebar navigation (only visible if user has vesting schedules)
+
+  3.5 — Wallet Connect Saving
+  ─────────────────────────────
+  File: apps/web-investor/src/app/(dashboard)/settings/page.tsx
+  - On wallet connect event, auto-call PUT /auth/profile with wallet_address
+  - Show "Wallet linked to your account" success toast
+  - Show "Unlink Wallet" button to clear wallet_address from profile
+  - Warn: "Your wallet address is used for token delivery. Changing it after
+    purchasing tokens requires contacting support."
+
+  3.6 — Notification Bell
+  ─────────────────────────
+  File: apps/web-investor/src/components/layout/Header.tsx
+  - Add bell icon with unread count badge
+  - Dropdown: last 10 notifications from GET /notifications/me
+  - Types: KYC approved/rejected, payment confirmed, tokens minted,
+    address frozen, corporate action scheduled
+  - "Mark all read" button
+  (Full WebSocket wiring in Phase 8; this uses polling for now)
+
+  3.7 — Token Listing Enhancement
+  ─────────────────────────────────
+  File: apps/web-investor/src/app/(dashboard)/tokens/page.tsx
+  - Show actual price per token (from token.metadata.offering.initial_price)
+  - Show % sold ((totalSupply - available) / totalSupply)
+  - Progress bar on each token card showing % sold
+  - Show minimum investment amount
+  - Filter: by compliance requirement (KYC only, Accredited only)
+  - Sort by: newest, price, asset type
+
+  3.8 — Token Detail Documents Section
+  ───────────────────────────────────────
+  File: apps/web-investor/src/app/(dashboard)/tokens/[id]/page.tsx
+  - Documents section: fetch from GET /tokens/:id/documents
+  - Show: prospectus, term sheet, investor presentation
+  - Download button per document (pre-signed S3 URL)
+  - Show compliance requirements from token.compliance_rules
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 4 — WEB-ISSUER COMPLETION
+  Duration: ~2 weeks  |  Priority: HIGH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  4.1 — Force Transfer
+  ──────────────────────
+  File: apps/web-issuer/src/app/(dashboard)/tokens/[id]/page.tsx
+  - Add "Force Transfer" button (beside Freeze/Unfreeze)
+  - Modal: from-address, to-address, amount, reason (dropdown + notes)
+  - Validate: both addresses must be whitelisted in IdentityRegistry
+  - On-chain: token.forcedTransfer(from, to, amount)
+  - API: POST /tokens/:id/force-transfer → logs to transactions table
+  - Audit log entry: who initiated, from/to, amount, reason
+  Use cases: regulatory order, issuer recovery, dividend reallocation
+
+  4.2 — Token Recovery
+  ──────────────────────
+  File: apps/web-issuer/src/app/(dashboard)/tokens/[id]/page.tsx
+  - Add "Recovery" button in token actions area
+  - Modal: lost wallet address, new wallet address
+  - Validate: lost wallet must be in cap table, new wallet must have ONCHAINID
+  - On-chain: token.recoveryAddress(lostWallet, newWallet, investorOnchainId)
+  - Update: cap_table (old wallet → new wallet), whitelist entry,
+    users table wallet_address
+  - Send recovery confirmation email to investor
+
+  4.3 — Vesting Schedules Management
+  ─────────────────────────────────────
+  New page: apps/web-issuer/src/app/(dashboard)/tokens/[id]/vesting/page.tsx
+  - List all vesting schedules for this token
+  - Create schedule form:
+    - Beneficiary (select from cap-table holders)
+    - Total amount (tokens)
+    - Start date, cliff date (optional), end date
+    - Vesting interval: daily/weekly/monthly/quarterly/yearly
+  - View: progress per beneficiary, next release, total vested vs released
+  - "Release Vested Tokens" button: mints released amount to beneficiary wallet
+  - Bulk release: release all eligible vesting events in one transaction
+  API: GET/POST/DELETE /vesting (new module in NestJS api)
+
+  4.4 — Corporate Actions Full Execution
+  ────────────────────────────────────────
+  File: apps/web-issuer/src/app/(dashboard)/corporate-actions/page.tsx
+  Implement execution for each type:
+
+  DIVIDEND:
+  - Parameters: amount per token (USD), record date, payment date
+  - On execution: fetch all cap_table holders at record date
+  - For each holder: calculate shares of dividend
+  - If paying in tokens: batch mint to all holders
+  - If paying in fiat: export CSV of payments for manual wire processing
+  - Record each payout in transactions table (tx_type = 'dividend')
+
+  STOCK SPLIT:
+  - Parameters: split ratio (e.g., 2:1 means double all holdings)
+  - On execution: call token.mint() for each holder proportionally
+  - Update cap_table percentages (they stay same, balances double)
+
+  VOTING:
+  - Parameters: resolution text, options, voting window
+  - Eligible voters: all cap_table holders at snapshot date
+  - Each holder votes proportional to their holdings
+  - Show results in real-time during voting period
+  - Voting stored in corporate_actions.parameters JSONB
+
+  BUYBACK:
+  - Parameters: price per token, max tokens to buy back
+  - Investors submit sell requests in web-investor
+  - Issuer accepts/rejects requests
+  - On accept: burn tokens + record fiat payment owed
+
+  4.5 — Token Documents Upload
+  ──────────────────────────────
+  New page: apps/web-issuer/src/app/(dashboard)/tokens/[id]/documents/page.tsx
+  - Upload: prospectus, term sheet, investor presentation, legal agreement
+  - File types: PDF, DOCX (max 50MB each)
+  - S3 upload via pre-signed URL from GET /tokens/:id/documents/upload-url
+  - List: all uploaded documents with file size, upload date, delete button
+  - Visibility: Public (investors can view) vs Private (issuer only)
+  API: GET/POST/DELETE /tokens/:id/documents
+
+  4.6 — Issuer Organization KYC
+  ───────────────────────────────
+  New page: apps/web-issuer/src/app/(dashboard)/settings/page.tsx (enhance)
+  Add "Organization Verification" section:
+  - Company name, registration number, country, jurisdiction
+  - Director details: name, nationality, % ownership
+  - Documents: certificate of incorporation, board resolution, proof of address
+  - Status: Not Submitted / Under Review / Approved / Rejected
+  API: POST /issuer-kyc (new endpoint)
+  Admin (web-admin): reviews issuer KYC before they can deploy live tokens
+  Gate: token deployment on mainnet only allowed if issuer_kyc = 'approved'
+
+  4.7 — Analytics Page with Real Data
+  ─────────────────────────────────────
+  File: apps/web-issuer/src/app/(dashboard)/analytics/page.tsx
+  Replace stub with real charts:
+  - Total Supply over time (line chart from transactions mint/burn events)
+  - Holder count over time (from cap_table createdAt)
+  - Transaction volume by day (bar chart from transactions table)
+  - Revenue by token (from payments table)
+  - Investor breakdown: retail vs accredited vs institutional (pie)
+  - Country distribution of holders (choropleth or bar chart)
+  Data: GET /analytics/tokens/:id + GET /analytics/overview
+
+  4.8 — Trusted Issuers Management UI
+  ─────────────────────────────────────
+  New page: apps/web-issuer/src/app/(dashboard)/tokens/[id]/trusted-issuers/page.tsx
+  - List: all registered trusted issuers for this token's TIR
+  - Add: enter ClaimIssuer contract address + claim topics it is trusted for
+  - Remove: unregister an issuer from TIR
+  - On-chain: trustedIssuersRegistry.addTrustedIssuer(issuerAddress, claimTopics)
+  Per ERC-3643: issuers who can sign claims for this token's investors
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 5 — EXTERNAL KYC PROVIDER INTEGRATION (SUMSUB)
+  Duration: ~1.5 weeks  |  Priority: HIGH (required for production)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  WHY:
+  Current custom KYC form is for development only. Production requires
+  accredited third-party KYC. Per PRD: Sumsub (primary), Jumio (secondary),
+  Onfido (fallback). Sumsub is industry standard for RWA platforms.
+
+  5.1 — Sumsub Backend Integration
+  ──────────────────────────────────
+  New file: apps/api/src/modules/kyc/services/sumsub.service.ts
+  Methods:
+  - createApplicant(userId, email, type): POST /resources/applicants
+    Returns applicantId — store in kyc_submissions.sumsub_applicant_id
+  - generateAccessToken(applicantId): POST /resources/accessTokens
+    Returns token for frontend SDK
+  - getApplicantStatus(applicantId): GET /resources/applicants/{id}/status
+  - handleWebhook(payload): process applicantReviewed events
+
+  Database: add sumsub_applicant_id VARCHAR(255) to kyc_submissions
+
+  Env vars to add to .env:
+    SUMSUB_APP_TOKEN=your_sumsub_app_token
+    SUMSUB_SECRET_KEY=your_sumsub_secret_key
+    SUMSUB_WEBHOOK_SECRET_KEY=your_webhook_secret
+
+  5.2 — Sumsub Webhook Handler
+  ─────────────────────────────
+  File: apps/api/src/modules/kyc/controllers/kyc.controller.ts
+  New endpoint: POST /kyc/webhook/sumsub
+  - Verify webhook HMAC signature
+  - On event 'applicantReviewed':
+    reviewResult.reviewAnswer = 'GREEN' → call existing approveSubmission()
+    reviewResult.reviewAnswer = 'RED'   → call existing rejectSubmission()
+    reviewResult.reviewRejectType       → store rejection reason
+  - On event 'applicantPending':
+    Update submission status = 'under_review'
+  - The approveSubmission() already triggers ONCHAINID creation (Phase 1)
+
+  5.3 — Sumsub SDK in web-investor
+  ──────────────────────────────────
+  npm install @sumsub/websdk-react --prefix apps/web-investor
+  File: apps/web-investor/src/app/(dashboard)/kyc/page.tsx
+  - Before showing custom form, fetch accessToken from GET /kyc/sumsub-token
+  - Embed SumsubWebSdk component with accessToken
+  - Handle onMessage callback: on 'idCheck.onApplicantLoaded' save applicantId
+  - Handle onComplete: show "Verification submitted to Sumsub"
+  - Keep custom form as fallback if Sumsub SDK fails to load
+  - Config: levelName matches Sumsub verification level set up in dashboard
+
+  5.4 — AML Screening
+  ─────────────────────
+  - Sumsub includes AML module — enable in Sumsub dashboard
+  - On applicant approval: check reviewResult.amlResults
+  - If AML flags found: set kyc_submissions.aml_flagged = true
+  - Prevent whitelisting if aml_flagged = true
+  - Admin can override after manual review (with audit trail)
+  - Add aml_flagged boolean + aml_details JSONB to kyc_submissions
+
+  5.5 — KYC Provider Factory Pattern
+  ─────────────────────────────────────
+  New file: apps/api/src/modules/kyc/services/kyc-provider.factory.ts
+  - Tries Sumsub first; falls back to manual review if SUMSUB_APP_TOKEN not set
+  - Allows toggling provider per tenant (enterprise feature later)
+  - Logs which provider processed each submission
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 6 — ADVANCED COMPLIANCE MODULES
+  Duration: ~1.5 weeks  |  Priority: MEDIUM-HIGH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  WHY:
+  Current on-chain compliance is limited to CountryRestrict, MaxHolder,
+  TransferWindow. Full ERC-3643 spec supports 8 compliance types.
+  These are needed for institutional/regulated token offerings.
+
+  6.1 — New On-Chain Modules (from legacy contracts to modular)
+  ──────────────────────────────────────────────────────────────
+  Convert legacy compliance features to modular compliance modules:
+
+  MaxBalanceModule (from MaxBalance.sol):
+  - Parameters: maxBalance (tokens per wallet), tokenAddress
+  - UI: new rule type 'max_balance' in compliance rules page
+  - Input: maximum tokens any single wallet can hold
+
+  SupplyLimitModule (from SupplyLimit.sol):
+  - Parameters: supplyLimit (max total supply ever)
+  - UI: 'supply_limit' rule type
+  - Input: hard cap on total supply
+
+  DayMonthLimitsModule (from DayMonthLimits.sol):
+  - Parameters: dayLimit, monthLimit (per investor transfer volume)
+  - UI: 'daily_monthly_limit' rule type
+  - Inputs: daily limit (tokens) + monthly limit (tokens)
+
+  ExchangeMonthlyLimitsModule:
+  - Parameters: monthlyLimit per exchange address
+  - UI: 'exchange_monthly_limit' rule type
+  - For tokens listed on regulated exchanges
+
+  6.2 — Conditional Transfer Approval Workflow
+  ─────────────────────────────────────────────
+  New DB table: transfer_approvals
+  Columns: id, token_id, from_address, to_address, amount, status
+           (pending/approved/rejected), approver_id, approver_notes,
+           requested_at, resolved_at, tx_hash
+
+  API endpoints:
+    POST /transfers/request   — investor requests transfer (compliance check first)
+    GET  /transfers/pending   — issuer sees all pending approvals
+    PUT  /transfers/:id/approve — issuer approves → executes token.transfer()
+    PUT  /transfers/:id/reject  — issuer rejects with reason
+
+  web-investor: new page /transfer/requests — list pending/approved/rejected
+  web-issuer: new page /tokens/:id/transfer-approvals — approval queue
+  Compliance rule type: 'conditional_transfer' (off-chain approval gate)
+
+  6.3 — Transfer Fees Module
+  ────────────────────────────
+  New compliance rule type: 'transfer_fee' in web-issuer compliance page
+  - Fee percentage: 0.01% to 100%
+  - Collector wallet address (where fees go)
+  - Fee calculation preview before user confirms transfer
+  On-chain: deployed as custom ModularCompliance module
+  Off-chain: calculated in transfer-validator.service.ts rule engine
+
+  6.4 — Transfer Whitelisting Module
+  ─────────────────────────────────────
+  New compliance rule type: 'sender_whitelist'
+  - Only pre-approved sender wallets can initiate transfers
+  - Configures list of allowed sender addresses
+  - Any wallet can receive
+  Use case: lock tokens to only be tradeable through specific venues/desks
+
+  6.5 — Compliance Simulation UI Enhancement
+  ────────────────────────────────────────────
+  File: apps/web-issuer/src/app/(dashboard)/tokens/[id]/transfer-check/page.tsx
+  Current: basic transfer check form
+  Enhance with:
+  - Full breakdown table: each compliance rule checked + pass/fail
+  - On-chain canTransfer() result with error code
+  - Off-chain rule engine result per rule
+  - Combined verdict with blocking reason prioritized
+  - "Why blocked" expandable section per failed rule
+  - Simulated amount field to test quantity-based rules (MaxBalance, DayLimit)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 7 — AUTHENTICATION SECURITY HARDENING
+  Duration: ~1 week  |  Priority: HIGH (required before production)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  7.1 — RS256 JWT Migration
+  ─────────────────────────
+  File: apps/api/src/modules/auth/services/jwt.service.ts
+  - Generate RSA-2048 key pair, store in AWS Secrets Manager or Vault
+  - Change JWT algorithm from HS256 (current JWT_SECRET) to RS256
+  - Add JWKS endpoint: GET /.well-known/jwks.json
+  - Key rotation: cron job every 90 days
+  Env vars: JWT_PRIVATE_KEY_PATH, JWT_PUBLIC_KEY_PATH
+  (Keep JWT_SECRET for migration period, dual-validate during transition)
+
+  7.2 — TOTP 2FA Setup
+  ──────────────────────
+  Install: npm install otpauth qrcode
+  New DB table: mfa_secrets (user_id, encrypted_secret, backup_codes JSONB,
+                enabled_at, last_used_at)
+  API endpoints:
+    POST /auth/mfa/setup           — generate TOTP secret + QR code URI
+    POST /auth/mfa/verify-setup    — verify first code to confirm enrollment
+    POST /auth/mfa/verify          — verify code during login
+    DELETE /auth/mfa/disable       — disable 2FA (requires current password)
+    GET /auth/mfa/backup-codes     — view backup codes (one time)
+  Login flow change:
+    POST /auth/login → if mfa_enabled: return { mfa_required: true, mfa_token }
+    POST /auth/mfa/verify with mfa_token → return { access_token }
+  Secret storage: AES-256-GCM encrypted, decryption key in Vault/Secrets Manager
+  Generate 8 single-use backup codes at enrollment (bcrypt hashed in DB)
+
+  7.3 — SMS 2FA (Twilio)
+  ───────────────────────
+  Install: npm install twilio
+  Env vars: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFY_SID
+  API endpoints:
+    POST /auth/mfa/sms/send     — send 6-digit OTP via Twilio Verify
+    POST /auth/mfa/sms/verify   — verify OTP
+  Rate limit: 5 attempts then 15-minute lockout
+  Fallback: SMS used when TOTP app unavailable
+
+  7.4 — TOTP/2FA UI in Both Portals
+  ─────────────────────────────────────
+  File: apps/web-investor/src/app/(dashboard)/settings/page.tsx
+  - "Security" tab: Enable/Disable 2FA section
+  - QR code scanner display (use next/image with data URI)
+  - Input to verify first code before enabling
+  - Backup codes display (show once, require download confirmation)
+  File: apps/web-issuer/src/app/(dashboard)/settings/page.tsx (same pattern)
+  Login pages (both portals): add TOTP input step if mfa_required in response
+
+  7.5 — OAuth 2.0 Google Login
+  ──────────────────────────────
+  Install: npm install passport-google-oauth20 passport
+  Env vars: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK_URL
+  API endpoints:
+    GET  /auth/oauth/google           — redirect to Google
+    GET  /auth/oauth/google/callback  — exchange code, upsert user, issue JWT
+  web-investor login page: add "Continue with Google" button
+  web-issuer login page: add "Continue with Google" button
+
+  7.6 — Session Management & Security Policies
+  ──────────────────────────────────────────────
+  - Redis-backed session: store IP, user-agent, last_active per session_id
+  - Concurrent session limit: 5 sessions max per user (enterprise: unlimited)
+  - Account lockout: 10 failed login attempts → 30-minute lockout → email alert
+  API endpoints:
+    GET    /auth/sessions        — list active sessions
+    DELETE /auth/sessions/:id    — revoke specific session
+    DELETE /auth/sessions        — revoke all sessions (logout everywhere)
+  web-investor settings: "Active Sessions" tab showing device/IP list
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 8 — REAL-TIME EVENTS & NOTIFICATIONS
+  Duration: ~1 week  |  Priority: MEDIUM
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  8.1 — WebSocket Server (Socket.io)
+  ───────────────────────────────────
+  Install: npm install @nestjs/websockets @nestjs/platform-socket.io socket.io
+  New file: apps/api/src/modules/notifications/gateways/notification.gateway.ts
+  - On connection: authenticate via JWT Bearer token
+  - Join user-specific room: socket.join('user:' + userId)
+  - Join token room: socket.join('token:' + tokenId) for issuers
+  Events emitted to rooms:
+    kyc.status_changed     → user room
+    payment.confirmed      → user room
+    tokens.minted          → user room
+    transfer.confirmed     → user room
+    address.frozen         → user room
+    token.deployed         → token room (issuer)
+    compliance.rule_added  → token room (issuer)
+    corporate_action.scheduled → token room (issuer)
+
+  8.2 — On-Chain Event → WebSocket Pipeline
+  ────────────────────────────────────────────
+  File: apps/blockchain-service/src/services/event-listener.service.ts
+  Add subscriptions to deployed token contracts:
+  - Transfer(from, to, value)     → update cap_table + emit transfer.confirmed
+  - TokensFrozen(userAddress)     → emit address.frozen
+  - TokensUnfrozen(userAddress)   → emit address.unfrozen
+  - Paused()                      → emit token.paused
+  - Unpaused()                    → emit token.unpaused
+  - IdentityRegistered(investor)  → emit investor.whitelisted
+  Publish events to RabbitMQ queue → notification-service consumes → WS emit
+
+  8.3 — Email Templates (Complete All)
+  ──────────────────────────────────────
+  File: apps/api/src/modules/notifications/services/template.service.ts
+  Add HTML email templates for:
+  1.  Welcome + email verification
+  2.  KYC submitted confirmation
+  3.  KYC approved (with ONCHAINID address)
+  4.  KYC rejected (with reason)
+  5.  KYC expiry warning (30 days before)
+  6.  Payment received + order confirmation (with receipt PDF)
+  7.  Tokens minted to your wallet (with tx hash)
+  8.  Transfer completed (sender + receiver)
+  9.  Address frozen notification
+  10. Vesting tokens released
+  11. Corporate action scheduled (dividend, voting)
+  12. Dividend payment (with amount + payment date)
+  13. Token deployed notification (to issuer)
+  14. Issuer KYC approved/rejected
+  15. Password changed alert
+  Use: AWS SES (configured in .env: AWS_SES_FROM_EMAIL)
+
+  8.4 — In-App Notification Center
+  ──────────────────────────────────
+  MongoDB collection: notifications
+  Schema: userId, title, body, type, read, tokenId (optional),
+          actionUrl, createdAt
+  API:
+    GET  /notifications          — paginated list
+    POST /notifications/read-all — mark all as read
+    PUT  /notifications/:id/read — mark one as read
+  web-investor Header.tsx: bell icon + dropdown (polling fallback in Phase 3,
+    replace with WS push here)
+  web-issuer layout.tsx: same notification bell
+
+  8.5 — Real-Time Cap Table Updates
+  ────────────────────────────────────
+  When blockchain Transfer event fires:
+  - Update cap_table in PostgreSQL (from blockchain-service via API call)
+  - Emit WebSocket event to issuer room: 'cap_table.updated' with new entry
+  web-issuer cap-table page: receive WS event → auto-refresh table without
+    full page reload
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 9 — ADMIN CONSOLE PRODUCTION READINESS
+  Duration: ~1.5 weeks  |  Priority: MEDIUM
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  9.1 — Tenant Billing (Stripe Subscriptions)
+  ─────────────────────────────────────────────
+  Plans (from PRD):
+    Free:         0 tokens, 0 investors, 0 chains
+    Starter:      $299/mo, 5 tokens, 500 investors, 1 chain
+    Professional: $999/mo, 20 tokens, 5000 investors, 3 chains
+    Enterprise:   Custom, unlimited
+
+  Implementation:
+  - On tenant creation: create Stripe Customer, create Subscription
+  - Enforce limits per plan in token/investor create endpoints (403 if over limit)
+  - Billing portal: GET /admin/billing/portal → Stripe self-serve portal URL
+  - Webhook: customer.subscription.updated → update tenant plan in DB
+  - Invoice history: GET /admin/billing/invoices → from Stripe API
+  New page: apps/web-admin/src/app/(dashboard)/tenants/[id]/billing/page.tsx
+
+  9.2 — API Key Management
+  ──────────────────────────
+  New DB table: api_keys
+  Columns: id, tenant_id, name, key_hash (SHA-256), key_prefix (first 8 chars),
+           scopes JSONB, rate_limit_per_min, last_used_at, expires_at, is_active
+
+  API endpoints:
+    POST   /admin/api-keys           — generate key (show full key ONCE)
+    GET    /admin/api-keys           — list keys (prefix only, never full key)
+    DELETE /admin/api-keys/:id       — revoke key
+
+  Auth guard update: accept both JWT Bearer AND API Key (x-api-key header)
+  Scopes: token:read, token:write, kyc:read, investor:read, compliance:write
+  New page: apps/web-admin/src/app/(dashboard)/api-keys/page.tsx
+
+  9.3 — White-Labeling Per Tenant
+  ─────────────────────────────────
+  New columns in tenants table:
+    primary_color VARCHAR(7), logo_url TEXT, favicon_url TEXT,
+    custom_domain VARCHAR(255), brand_name VARCHAR(255),
+    support_email VARCHAR(255)
+
+  API: GET /admin/tenants/:id/branding → returns branding config
+  web-investor: on app load, fetch branding from API, apply via CSS variables
+  web-issuer: same approach
+  New page: apps/web-admin/src/app/(dashboard)/tenants/[id]/branding/page.tsx
+    - Color picker for primary color
+    - Logo upload (S3)
+    - Custom domain input (instructions for CNAME setup)
+
+  9.4 — Advanced Platform Analytics
+  ─────────────────────────────────────
+  New page: apps/web-admin/src/app/(dashboard)/analytics/page.tsx
+  Charts and metrics:
+  - Total TVL (sum of all token supplies × price): line chart over 90 days
+  - Active investors count: by day/week/month
+  - Token deployments: by chain, by asset type
+  - KYC funnel: submitted → approved → whitelisted → holding
+  - Payment volume: by day, by payment method
+  - Cross-tenant breakdown table: tokens, investors, revenue per tenant
+  Export: download any dataset as CSV
+
+  9.5 — System Health Monitoring Page
+  ─────────────────────────────────────
+  New page: apps/web-admin/src/app/(dashboard)/system/page.tsx
+  Shows:
+  - API health (uptime, response time, error rate from API logs)
+  - Blockchain service status per chain (Sepolia/Polygon/Bharat)
+  - RPC endpoint latency
+  - Database connection pool usage
+  - Redis memory usage
+  - Queue depth (pending blockchain transactions)
+  - Recent failed transactions (retry button per tx)
+  Backend: GET /admin/system/health endpoint
+
+  9.6 — Tenant Suspension & Controls
+  ─────────────────────────────────────
+  In web-admin tenant detail page:
+  - Suspend Tenant button: disables all API calls for that tenant (403 returned)
+  - Unsuspend button
+  - Suspension reason + internal notes
+  - Activity log per tenant: token deployments, investor additions, payments
+  - Hard delete: option to archive (anonymize + retain audit trail)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 10 — MPC WALLETS & CUSTODY (ENTERPRISE FEATURE)
+  Duration: ~2 weeks  |  Priority: LOW-MEDIUM (defer if needed)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  WHY:
+  Investors who don't want to manage MetaMask/private keys need a custodial
+  wallet automatically provisioned. Per PRD: MPC (Multi-Party Computation)
+  wallet service. The .env already has Web3Auth infra keys configured.
+
+  10.1 — Wallet Service Architecture
+  ─────────────────────────────────────
+  New app: apps/wallet-service/
+    src/
+      main.ts
+      blockchain.module.ts
+      services/
+        mpc-wallet.service.ts      — create, derive, sign
+        vault-client.service.ts    — HashiCorp Vault for key shares
+        balance.service.ts         — query on-chain balances
+      controllers/wallet.controller.ts
+  Options (choose one based on budget):
+  Option A: Fireblocks SDK (recommended for enterprise)
+    - POST /vault/accounts to create custodial wallet
+    - Fireblocks handles MPC key management
+    - Env: FIREBLOCKS_API_KEY, FIREBLOCKS_PRIVATE_KEY
+  Option B: Web3Auth MPC (already in .env: NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID)
+    - Threshold signature scheme via Web3Auth Tkey
+    - Social recovery via Google/GitHub
+  Option C: Custom TSS (complex, not recommended for MVP)
+
+  10.2 — Auto-Provisioning on Registration
+  ──────────────────────────────────────────
+  File: apps/api/src/modules/auth/services/auth.service.ts
+  In register() method:
+  - If user does NOT connect MetaMask during registration:
+    a. Call wallet-service POST /wallets/create
+    b. Store returned wallet_address in users table
+    c. Show wallet address to user on dashboard (read-only for custodial)
+  - If user connects MetaMask: use self-custody wallet (existing flow)
+  User can upgrade from custodial → self-custody in settings
+
+  10.3 — Custodial Transaction Signing
+  ──────────────────────────────────────
+  For token transfers, minting (post-payment), vesting releases:
+  - If investor's wallet is custodial: route tx through wallet-service
+  - wallet-service signs tx using stored key shares via Vault
+  - No user private key exposure (server-side signing)
+  Replaces: need for investor to have MetaMask for receiving tokens
+  Still need: investor MetaMask for P2P transfers (optional)
+
+  10.4 — web-investor Wallet Settings Update
+  ─────────────────────────────────────────────
+  File: apps/web-investor/src/app/(dashboard)/settings/page.tsx
+  Add "Wallet" section with:
+  - Custodial wallet: show address, "Export Private Key" (requires 2FA verify)
+  - Connect external wallet (MetaMask/WalletConnect)
+  - Switch mode: Custodial → Self-Custody (requires KYC verification)
+  - Balance view: show ETH + all token balances
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 11 — MULTI-CHAIN EXPANSION
+  Duration: ~1 week  |  Priority: MEDIUM
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Currently only Sepolia (11155111) has a configured factory address.
+  Per .env: POLYGON_RPC_URL, BHARAT_RPC_URL, ETHEREUM_RPC_URL are defined
+  but no factory addresses for those chains.
+
+  11.1 — Deploy Factories on Each Chain
+  ────────────────────────────────────────
+  File: contracts/scripts/ — new deploy scripts per chain
+  - Deploy TREXFactory + TREXImplementationAuthority on Polygon (137)
+  - Deploy TREXFactory + TREXImplementationAuthority on Bharat Chain (8272)
+  - Deploy TREXFactory + TREXImplementationAuthority on Ethereum Mainnet (1)
+  - For same-address deployment across chains: use CREATE2 via TREXGateway
+  Env vars to add to .env and web-issuer .env:
+    POLYGON_FACTORY_ADDRESS=0x...
+    BHARAT_FACTORY_ADDRESS=0x...
+    ETH_MAINNET_FACTORY_ADDRESS=0x...
+    NEXT_PUBLIC_POLYGON_FACTORY_ADDRESS=0x...
+    NEXT_PUBLIC_BHARAT_FACTORY_ADDRESS=0x...
+
+  11.2 — ONCHAINID Per-Chain
+  ────────────────────────────
+  File: apps/api/src/modules/identity/services/identity-deployment.service.ts
+  - When investor holds tokens on multiple chains:
+    Deploy ONCHAINID on each new chain they're added to
+  - Use CREATE2 for same ONCHAINID address across chains
+  - onchain_identities table: one row per (user_id, chain_id)
+
+  11.3 — web-issuer Chain Selector Update
+  ─────────────────────────────────────────
+  File: apps/web-issuer/src/app/(dashboard)/tokens/create/page.tsx
+  - Enable Polygon + Bharat + Ethereum options (currently disabled)
+  - Show gas cost estimate in USD for each chain
+  - Show: "Polygon: ~$0.001 gas, Sepolia: test only, Bharat: ₹X"
+
+  11.4 — web-investor Multi-Chain Portfolio
+  ───────────────────────────────────────────
+  File: apps/web-investor/src/app/(dashboard)/portfolio/page.tsx
+  - Group holdings by chain
+  - Chain switcher tab: All / Ethereum / Polygon / Bharat
+  - Show native token balance per chain (ETH, MATIC, BRT)
+  - Cross-chain portfolio total in USD
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PHASE 12 — SECURITY AUDIT, CI/CD & PRODUCTION READINESS
+  Duration: ~2 weeks  |  Priority: HIGH (go-live gate)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  12.1 — Smart Contract Security Audit
+  ──────────────────────────────────────
+  - Run Slither: slither contracts/ --filter-paths node_modules
+  - Run Echidna fuzz testing on compliance modules
+  - Run Hardhat tests: npx hardhat test (full test suite)
+  - External audit firm (Hacken recommended — already audits ERC-3643 official)
+  - Fix all Critical + High findings before mainnet deployment
+  - Re-audit after fixes
+
+  12.2 — API Security Hardening
+  ──────────────────────────────
+  - Rate limiting: already in .env (RATE_LIMIT_TTL=60, RATE_LIMIT_MAX=120)
+    Tighten: auth endpoints: max 10/min, public endpoints: max 200/min
+  - Input validation: ensure all DTOs have class-validator decorators
+  - SQL injection: confirm all queries use TypeORM parameters (no raw strings)
+  - CORS: tighten CORS_ORIGINS to production domains only
+  - Helmet.js: add security headers (already likely in NestJS)
+  - API secrets: rotate DEPLOYER_PRIVATE_KEY to HSM-backed key
+  - Audit: review all endpoints for missing JWT guard or role check
+
+  12.3 — GitHub Actions CI/CD
+  ──────────────────────────────
+  File: .github/workflows/ci.yml — add steps:
+    - npx hardhat compile + npx hardhat test
+    - cd apps/api && npm test (Jest unit + integration tests)
+    - cd apps/web-issuer && npm run build
+    - cd apps/web-investor && npm run build
+    - cd apps/web-admin && npm run build
+    - Docker build + push to AWS ECR (on main branch merge)
+    - Staging deploy to EKS on main branch merge
+    - Production deploy on git tag push (manual approval gate)
+
+  12.4 — Kubernetes Production Configs
+  ──────────────────────────────────────
+  File: infrastructure/kubernetes/
+  - Add HPA (HorizontalPodAutoscaler) for api, blockchain-service
+  - Resource limits: requests + limits for CPU/memory per service
+  - Readiness probe: /health endpoint on all services
+  - Liveness probe: /health/live endpoint
+  - Network policies: services only reachable from api-gateway internally
+  - External Secrets Operator: sync AWS Secrets Manager → K8s Secrets
+
+  12.5 — Monitoring & Alerting
+  ──────────────────────────────
+  - Prometheus metrics endpoint: /metrics on each service
+  - Custom metrics: blockchain_tx_submitted_total, kyc_approvals_total,
+    payments_processed_total, failed_tx_total
+  - Grafana dashboards:
+    Dashboard 1: API health (latency p50/p95/p99, error rate, req/s)
+    Dashboard 2: Blockchain ops (tx success rate, RPC latency per chain)
+    Dashboard 3: KYC funnel (submitted/approved/rejected by day)
+    Dashboard 4: Payments (volume, method breakdown, failed payments)
+    Dashboard 5: Token metrics (supply, holders, transfers per token)
+  - PagerDuty alerts:
+    API error rate > 5% for 5 minutes
+    Blockchain RPC latency > 10s
+    Payment webhook failure rate > 1%
+    Deployer wallet balance < 0.1 ETH
+
+  12.6 — GDPR & Data Compliance
+  ───────────────────────────────
+  - DELETE /users/me/data: anonymize all PII (keep audit trail hashed)
+  - Data export: GET /users/me/export → ZIP with all user data (GDPR Article 20)
+  - S3 lifecycle rule: KYC documents auto-delete after 7 years
+  - Audit log immutability: daily S3 export, write-once bucket policy
+  - Cookie consent banner in web-investor registration flow
+  - Privacy policy link on all registration pages
+
+  12.7 — Load Testing
+  ────────────────────
+  Tool: k6 or Artillery
+  Test scenarios:
+  - 1000 concurrent investor token browsing sessions
+  - 500 concurrent KYC submissions
+  - 100 concurrent Stripe checkout sessions
+  - 50 concurrent token deployments
+  Target SLAs (per PRD NFRs):
+  - API response time p95 < 500ms
+  - Token deployment < 30 seconds (Sepolia)
+  - Uptime: 99.9% (8.7 hours/year downtime budget)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  DEPENDENCY MAP & RECOMMENDED EXECUTION ORDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Phase 1 (ONCHAINID)           ← START HERE. Blocks Phases 3, 4, 5
+  Phase 2 (Payments→Mint)       ← Start alongside Phase 1 (no hard dep)
+  Phase 7 (Auth Security)       ← Run in parallel with Phases 1+2 (no deps)
+  Phase 3 (web-investor)        ← After Phase 1 + 2 complete
+  Phase 4 (web-issuer)          ← After Phase 1 + 2 complete
+  Phase 5 (Sumsub KYC)          ← After Phase 1 complete (needs ONCHAINID)
+  Phase 6 (Compliance Modules)  ← After Phase 1 complete
+  Phase 8 (Real-Time/WS)        ← After Phases 3 + 4 complete
+  Phase 9 (Admin Production)    ← After Phase 2 complete
+  Phase 10 (MPC Wallets)        ← After Phase 7 complete
+  Phase 11 (Multi-Chain)        ← After Phase 1 complete (contract deploy)
+  Phase 12 (Production)         ← After ALL phases complete
+
+  TIMELINE SUMMARY:
+  ─────────────────
+  Weeks  1–2:  Phase 1 (ONCHAINID) + Phase 7 (Auth Security) in parallel
+  Weeks  2–3:  Phase 2 (Payments Pipeline)
+  Weeks  3–5:  Phase 3 (web-investor) + Phase 4 (web-issuer) in parallel
+  Weeks  5–6:  Phase 5 (Sumsub KYC)
+  Weeks  6–7:  Phase 6 (Compliance Modules)
+  Week   8:    Phase 8 (Real-Time/Notifications)
+  Weeks  8–9:  Phase 9 (Admin Production)
+  Weeks  9–11: Phase 10 (MPC Wallets)
+  Week   11:   Phase 11 (Multi-Chain)
+  Weeks 12–14: Phase 12 (Security Audit + Production Hardening)
+
+  TOTAL ESTIMATED DURATION: ~14–20 weeks (per PRD timeline of 16–20 weeks)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  MOST CRITICAL SINGLE ITEM TO START FIRST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Phase 1.1 → 1.4 (ONCHAINID deploy + KYC approval pipeline).
+  Without real investor ONCHAINID contracts and on-chain claims, the ERC-3643
+  compliance canTransfer() will reject ALL transfers even for whitelisted
+  investors. The entire business function of token transfers breaks.
+  Everything else depends on this working correctly.
+
+================================================================================
+  END OF IMPLEMENTATION PLAN
+  File: IMPLEMENTATION_PHASES.txt
+  Project: Assetro Tokenization Platform
+================================================================================

@@ -1,0 +1,508 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design tokens shared with the investor portal (assetro RWA reference design).
+ * Light is the default; dark is opted into with a `.dark` class on <html>
+ * (next-themes) and also honoured via prefers-color-scheme.
+ */
+:root {
+  --background: 246 249 247;
+  --surface-alt: 237 244 240;
+  --card: 255 255 255;
+  --text-main: 18 36 29;
+  --text-muted: 92 111 101;
+  --border-line: 219 230 223;
+  --neutral-800: 219 230 223;
+  --accent: 13 124 89;
+  --accent2: 52 170 122;
+  --accent-subtle: 224 245 235;
+  --button-bg: 16 55 41;
+  --button-text: 255 255 255;
+  --header-bg: 232 241 236;
+
+  --success: 22 163 74;
+  --success-subtle: 220 243 228;
+  --warning: 180 115 10;
+  --warning-subtle: 253 240 215;
+  --danger: 204 44 44;
+  --danger-subtle: 253 226 226;
+
+  --shadow-card: 0 14px 36px rgba(22, 52, 37, 0.08), 0 2px 8px rgba(22, 52, 37, 0.04);
+  --radius-card: 18px;
+}
+
+.dark {
+  --background: 13 18 23;
+  --surface-alt: 18 26 32;
+  --card: 24 33 40;
+  --text-main: 239 245 243;
+  --text-muted: 166 184 180;
+  --border-line: 54 70 77;
+  --neutral-800: 35 47 55;
+  --accent: 103 221 171;
+  --accent2: 139 217 189;
+  --accent-subtle: 25 55 45;
+  --button-bg: 103 221 171;
+  --button-text: 8 27 20;
+  --header-bg: 29 40 47;
+
+  --success: 74 222 128;
+  --success-subtle: 24 56 42;
+  --warning: 250 204 21;
+  --warning-subtle: 59 45 26;
+  --danger: 248 113 113;
+  --danger-subtle: 58 32 37;
+
+  --shadow-card: 0 18px 42px rgba(0, 0, 0, 0.24), 0 2px 8px rgba(0, 0, 0, 0.16);
+}
+
+@layer base {
+  * {
+    border-color: rgb(var(--border-line));
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 70px;
+  }
+
+  body {
+    background-color: rgb(var(--background));
+    color: rgb(var(--text-main));
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-size: 15px;
+    line-height: 1.55;
+    transition: background-color 0.3s, color 0.3s;
+  }
+
+  /* Reference headings: heavy weight, tight tracking. */
+  h1 {
+    font-size: clamp(30px, 4.5vw, 44px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+  }
+
+  h2 {
+    font-size: clamp(22px, 3vw, 30px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+  }
+
+  h3 {
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+}
+
+@keyframes slide {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes floatY {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+@keyframes pulseSoft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+@keyframes driftA {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-20px, 20px) scale(1.08); }
+}
+@keyframes driftB {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(20px, -15px) scale(1.05); }
+}
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes textShimmer {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes orbitClockwise {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes orbitCounter {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+@keyframes scanline {
+  0% { transform: translateY(-100%); opacity: 0; }
+  25% { opacity: 0.9; }
+  75% { opacity: 0.9; }
+  100% { transform: translateY(350%); opacity: 0; }
+}
+@keyframes timelinePulse {
+  0% { transform: translateY(-100%); opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translateY(400%); opacity: 0; }
+}
+@keyframes badgeFloat1 {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(1deg); }
+}
+@keyframes badgeFloat2 {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-12px) rotate(-1.5deg); }
+}
+@keyframes badgeFloat3 {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(1deg); }
+}
+@keyframes heartbeat {
+  0% { stroke-dashoffset: 600; }
+  100% { stroke-dashoffset: 0; }
+}
+@keyframes subtlePulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.04); opacity: 1; }
+}
+
+@layer components {
+  /* ── Surfaces ─────────────────────────────────────────────────────────── */
+
+  /* Reference `.card`: flat, bordered, soft shadow. No gradients or blur. */
+  .card {
+    background-color: rgb(var(--card));
+    border: 1px solid rgb(var(--border-line));
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+  }
+
+  /* Reference `.box`: lighter container, no shadow, tighter radius. */
+  .panel {
+    background-color: rgb(var(--card));
+    border: 1px solid rgb(var(--border-line));
+    border-radius: 16px;
+  }
+
+  .panel-highlight {
+    border-color: rgb(var(--accent));
+    box-shadow: 0 0 0 1px rgb(var(--accent)), var(--shadow-card);
+  }
+
+  /* Reference `.m3 div` / `.bar`: inset tiles on the header tint. */
+  .tile {
+    background-color: rgb(var(--header-bg));
+    border-radius: 12px;
+    padding: 10px 12px;
+  }
+
+  /* ── Buttons ──────────────────────────────────────────────────────────── */
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 disabled:pointer-events-none disabled:opacity-50;
+    padding: 11px 18px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 13px;
+    border: 1px solid rgb(var(--border-line));
+    background-color: rgb(var(--card));
+    color: rgb(var(--text-main));
+    cursor: pointer;
+    transition: transform 0.15s, background-color 0.15s, border-color 0.15s;
+  }
+
+  .btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  .btn-primary {
+    @apply btn;
+    background-color: rgb(var(--button-bg));
+    color: rgb(var(--button-text));
+    border-color: rgb(var(--button-bg));
+  }
+
+  .btn-secondary {
+    @apply btn;
+  }
+
+  .btn-ghost {
+    @apply btn;
+    background-color: transparent;
+    border-color: transparent;
+    color: rgb(var(--text-muted));
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background-color: rgb(var(--header-bg));
+    color: rgb(var(--text-main));
+  }
+
+  .btn-danger {
+    @apply btn;
+    background-color: rgb(var(--danger));
+    border-color: rgb(var(--danger));
+    color: #fff;
+  }
+
+  /* ── Labels & badges ──────────────────────────────────────────────────── */
+
+  /* Reference `.pill` */
+  .pill {
+    @apply inline-flex items-center gap-1.5;
+    padding: 6px 12px;
+    border-radius: 99px;
+    background-color: rgb(var(--accent-subtle));
+    color: rgb(var(--accent));
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  /* Reference `.k` kicker */
+  .kicker {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgb(var(--accent));
+  }
+
+  .label {
+    @apply block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgb(var(--text-muted));
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1.5;
+    padding: 4px 10px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid transparent;
+  }
+
+  .badge-success {
+    @apply badge;
+    background-color: rgb(var(--success-subtle));
+    color: rgb(var(--success));
+  }
+
+  .badge-warning {
+    @apply badge;
+    background-color: rgb(var(--warning-subtle));
+    color: rgb(var(--warning));
+  }
+
+  .badge-danger {
+    @apply badge;
+    background-color: rgb(var(--danger-subtle));
+    color: rgb(var(--danger));
+  }
+
+  .badge-neutral {
+    @apply badge;
+    background-color: rgb(var(--header-bg));
+    color: rgb(var(--text-muted));
+  }
+
+  /* ── Forms ────────────────────────────────────────────────────────────── */
+
+  .input-field,
+  .input {
+    @apply w-full;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid rgb(var(--border-line));
+    background-color: rgb(var(--card));
+    color: rgb(var(--text-main));
+    font-size: 14px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .input-field::placeholder,
+  .input::placeholder {
+    color: rgb(var(--text-muted));
+  }
+
+  .input-field:focus,
+  .input:focus {
+    outline: none;
+    border-color: rgb(var(--accent));
+    box-shadow: 0 0 0 3px rgb(var(--accent) / 0.15);
+  }
+
+  /* ── Data display ─────────────────────────────────────────────────────── */
+
+  /* Reference `.bar` progress meter */
+  .meter {
+    height: 6px;
+    background-color: rgb(var(--header-bg));
+    border-radius: 9px;
+    overflow: hidden;
+  }
+
+  .meter > span {
+    display: block;
+    height: 100%;
+    background-color: rgb(var(--accent));
+    border-radius: 9px;
+    transition: width 1.4s;
+  }
+
+  /* Reference table styling */
+  .data-table {
+    @apply w-full;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .data-table th {
+    padding: 14px 16px;
+    text-align: left;
+    border-bottom: 1px solid rgb(var(--border-line));
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgb(var(--text-muted));
+    background-color: rgb(var(--header-bg));
+    font-weight: 700;
+  }
+
+  .data-table td {
+    padding: 14px 16px;
+    text-align: left;
+    border-bottom: 1px solid rgb(var(--border-line));
+  }
+
+  .data-table tr:last-child td {
+    border-bottom: 0;
+  }
+
+  /* Reference `.big` figure */
+  .stat-value {
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: rgb(var(--text-main));
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: rgb(var(--text-muted));
+  }
+
+  /* Reference `.ic` icon chip */
+  .icon-chip {
+    @apply grid place-items-center shrink-0;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    background-color: rgb(var(--accent-subtle));
+    color: rgb(var(--accent));
+  }
+
+  /* ── Marketing bands ─────────────────────────────────────────────────── */
+
+  /* Evergreen CTA band keeps white copy readable in both themes. */
+  .cta-band {
+    background: linear-gradient(135deg, rgb(13 43 31 / 0.96), rgb(18 78 53 / 0.88));
+    color: #fff;
+    border-radius: 22px;
+  }
+
+  .dark .cta-band {
+    background: linear-gradient(135deg, rgb(20 30 37 / 0.98), rgb(23 55 48 / 0.92));
+    border: 1px solid rgb(var(--accent) / 0.28);
+  }
+
+  .cta-band .cta-muted {
+    color: rgb(211 230 218 / 0.82);
+  }
+
+  /* The light button that sits on the band. */
+  .cta-btn {
+    @apply inline-flex items-center justify-center gap-2;
+    padding: 14px 28px;
+    border-radius: 10px;
+    font-weight: 600;
+    background-color: rgb(var(--button-text));
+    color: rgb(var(--button-bg));
+    transition: transform 0.15s, opacity 0.15s;
+  }
+
+  .cta-btn:hover {
+    transform: translateY(-1px);
+    opacity: 0.92;
+  }
+
+  /* The outlined counterpart. */
+  .cta-btn-ghost {
+    @apply inline-flex items-center justify-center gap-2;
+    padding: 14px 28px;
+    border-radius: 10px;
+    font-weight: 600;
+    border: 1px solid rgb(255 255 255 / 0.3);
+    background-color: rgb(255 255 255 / 0.08);
+    color: #fff;
+    transition: transform 0.15s, background-color 0.15s;
+  }
+
+  .cta-btn-ghost:hover {
+    transform: translateY(-1px);
+    background-color: rgb(255 255 255 / 0.16);
+  }
+}
+
+@layer utilities {
+  .text-muted {
+    color: rgb(var(--text-muted));
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--border-line)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgb(var(--border-line));
+    border-radius: 3px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .card,
+  .panel,
+  .btn,
+  .input-field,
+  .input {
+    transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease,
+      transform 180ms ease;
+  }
+}
+
+:focus-visible {
+  outline: 3px solid rgb(var(--accent) / 0.42);
+  outline-offset: 2px;
+}

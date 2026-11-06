@@ -1,0 +1,15 @@
+{
+  "network": "sepolia",
+  "chainId": "11155111",
+  "deployer": "0x64D2E12ACAFBfD3c0BFf5fbcCdbcA4b242FF49C1",
+  "deployedAt": "2026-06-02T09:19:00.784Z",
+  "CountryRestrictModule": "0x29993098e42260a5c67FF15A9eF6f1Be83b2ec15",
+  "MaxHolderModule": "0x37Ecb58Ca547D5Efe3E545Fd0B34700a4a49f493",
+  "TransferWindowModule": "0xAa441712692AF06065b78B4674819BD66A11FE19",
+  "SupplyLimitModule": "0xd9A16eC53545B517B1e97432b5AcBa3e2eE54cDA",
+  "MaxBalanceModule": "0x87DC2c7f2726b1E4aA852d303342Ce11D8C5aA0b",
+  "DayMonthLimitsModule": "0x6CdFa754678Ef42abc1Dc945420108CF2413906e",
+  "ExchangeMonthlyLimitsModule": "0xEC8f99124c6B38922FC803542284535204f0F9A5",
+  "TransferFeeModule": "0xaAE9d6325877d694731b308B7645C02CAAD0689a",
+  "SenderWhitelistModule": "0xFcb21c52981E6c57A03B5e09b769B203f73850B0"
+}

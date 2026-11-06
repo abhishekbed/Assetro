@@ -1,0 +1,18 @@
+{
+  "_comment": "Placeholder ABI - replace with compiled artifact from Hardhat (ERC-3643 Identity Registry)",
+  "abi": [
+    "function registerIdentity(address userAddress, address identity, uint16 country)",
+    "function deleteIdentity(address userAddress)",
+    "function updateIdentity(address userAddress, address identity)",
+    "function updateCountry(address userAddress, uint16 country)",
+    "function contains(address userAddress) view returns (bool)",
+    "function isVerified(address userAddress) view returns (bool)",
+    "function identity(address userAddress) view returns (address)",
+    "function investorCountry(address userAddress) view returns (uint16)",
+    "event IdentityRegistered(address indexed investorAddress, address indexed identity)",
+    "event IdentityRemoved(address indexed investorAddress, address indexed identity)",
+    "event IdentityUpdated(address indexed oldIdentity, address indexed newIdentity)",
+    "event CountryUpdated(address indexed investorAddress, uint16 indexed country)"
+  ],
+  "bytecode": "0x"
+}

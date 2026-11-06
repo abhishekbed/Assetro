@@ -1,0 +1,16 @@
+{
+  "_comment": "Placeholder ABI - replace with compiled artifact from Hardhat (ERC-3643 Modular Compliance)",
+  "abi": [
+    "function addModule(address module)",
+    "function removeModule(address module)",
+    "function isModuleBound(address module) view returns (bool)",
+    "function getModules() view returns (address[])",
+    "function canTransfer(address from, address to, uint256 amount) view returns (bool)",
+    "function transferred(address from, address to, uint256 amount)",
+    "function created(address to, uint256 amount)",
+    "function destroyed(address from, uint256 amount)",
+    "event ModuleAdded(address indexed module)",
+    "event ModuleRemoved(address indexed module)"
+  ],
+  "bytecode": "0x"
+}

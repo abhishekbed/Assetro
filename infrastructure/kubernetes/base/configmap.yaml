@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: assetro-config
+  namespace: assetro-platform
+  labels:
+    app.kubernetes.io/name: assetro-platform
+    app.kubernetes.io/part-of: assetro
+data:
+  # -- Application ---------------------------------------------------------------
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+  TZ: "UTC"
+
+  # -- PostgreSQL ----------------------------------------------------------------
+  DATABASE_HOST: "assetro-postgres.assetro-platform.svc.cluster.local"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "assetro_platform"
+  DATABASE_SSL: "true"
+
+  # -- MongoDB -------------------------------------------------------------------
+  MONGODB_HOST: "assetro-mongodb.assetro-platform.svc.cluster.local"
+  MONGODB_PORT: "27017"
+  MONGODB_DATABASE: "assetro_logs"
+
+  # -- Redis ---------------------------------------------------------------------
+  REDIS_HOST: "assetro-redis.assetro-platform.svc.cluster.local"
+  REDIS_PORT: "6379"
+
+  # -- RabbitMQ ------------------------------------------------------------------
+  RABBITMQ_HOST: "assetro-rabbitmq.assetro-platform.svc.cluster.local"
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_VHOST: "assetro"
+
+  # -- API URLs ------------------------------------------------------------------
+  API_GATEWAY_URL: "https://api.assetro.com"
+  ADMIN_PORTAL_URL: "https://admin.assetro.com"
+  INVESTOR_PORTAL_URL: "https://app.assetro.com"
+
+  # -- AWS / S3 ------------------------------------------------------------------
+  AWS_REGION: "us-east-1"
+  S3_BUCKET_DOCUMENTS: "assetro-documents-prod"
+
+  # -- Blockchain ----------------------------------------------------------------
+  DEFAULT_CHAIN_ID: "1"
+  BLOCK_CONFIRMATIONS: "12"
