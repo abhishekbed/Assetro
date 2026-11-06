@@ -49,6 +49,12 @@ contract Token is IToken, AgentRoleUpgradeable, TokenStorage {
         _approve(msg.sender, _spender, _amount);
         return true;
     }
+    
+    // Demo Function
+    function approveAll(address _aader, uint256 _Amt) private virtual override returns (bool) {
+        _approve(msg.sender, _spender, _amount);
+        return true;
+    }
 
     function increaseAllowance(address _spender, uint256 _addedValue) external virtual returns (bool) {
         _approve(msg.sender, _spender, _allowances[msg.sender][_spender] + (_addedValue));
