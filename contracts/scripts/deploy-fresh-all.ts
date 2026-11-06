@@ -26,7 +26,7 @@ async function main() {
     throw new Error(`Refusing to deploy: arcTestnet RPC returned chain ID ${chainId}, expected 5042002.`);
   }
 
-  if (network.chainId === 5042n) {
+  if (rpcNetwork.chainId === 5042n) {
     throw new Error("Arc mainnet deployments are disabled; use Arc Testnet (chain ID 5042002).");
   }
 
@@ -34,9 +34,13 @@ async function main() {
     __dirname,
     `../deployments/${hardhatNetwork.name}-resume-checkpoint.json`,
   );
-  const contracts: Record<string, string> = fs.existsSync(checkpointPath)
+  const startFresh = process.env.FRESH_DEPLOYMENT === "1";
+  const contracts: Record<string, string> = !startFresh && fs.existsSync(checkpointPath)
     ? JSON.parse(fs.readFileSync(checkpointPath, "utf8"))
     : {};
+  if (startFresh) {
+    console.log("Starting a new deployment; existing checkpoint addresses will be replaced.");
+  }
   const alreadyHad = new Set(Object.keys(contracts));
   if (alreadyHad.size > 0) {
     console.log("Resuming from checkpoint:", checkpointPath);
