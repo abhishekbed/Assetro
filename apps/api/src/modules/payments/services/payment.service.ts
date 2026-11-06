@@ -341,7 +341,7 @@ export class PaymentService {
     }
 
     // Already processed — idempotency guard
-    if ([PaymentStatus.COMPLETED, PaymentStatus.FAILED, PaymentStatus.PAID, PaymentStatus.PROCESSING].includes(payment.status)) {
+    if ([PaymentStatus.COMPLETED, PaymentStatus.FAILED, PaymentStatus.PAID, PaymentStatus.PROCESSING, PaymentStatus.MINT_REVIEW].includes(payment.status)) {
       this.logger.log(`[Webhook] Payment ${payment.id} already processed: ${payment.status}`);
       return;
     }
@@ -444,6 +444,7 @@ export class PaymentService {
     }
 
     if (!walletAddress) {
+      payment.status = PaymentStatus.MINT_REVIEW;
       payment.failureReason = 'Payment confirmed; investor wallet is missing';
       await this.paymentRepository.save(payment);
       this.logger.warn(`[AutoMint] Cannot auto-mint payment ${payment.id}: no wallet address found`);
@@ -460,12 +461,13 @@ export class PaymentService {
     }
     payment.status = PaymentStatus.PROCESSING;
 
+    let mintResult: Awaited<ReturnType<TokenLifecycleService['mint']>>;
     try {
       this.logger.log(
         `[AutoMint] Initiating automatic on-chain mint: payment=${payment.id} token=${payment.tokenId} to=${walletAddress} amount=${payment.tokenAmount}`,
       );
 
-      const mintResult = await this.tokenLifecycle.mint(
+      mintResult = await this.tokenLifecycle.mint(
         {
           token_id: payment.tokenId,
           to_address: walletAddress,
@@ -475,39 +477,49 @@ export class PaymentService {
         payment.tenantId ?? undefined,
       );
 
-      payment.status = PaymentStatus.COMPLETED;
-      payment.completedAt = new Date();
-      payment.failureReason = null;
-      payment.metadata = {
-        ...(payment.metadata ?? {}),
-        mint_tx_hash: mintResult.transactionHash,
-        mint_block: mintResult.blockNumber,
-        auto_minted: true,
-        confirmed_at: new Date().toISOString(),
-      };
-      await this.paymentRepository.save(payment);
-      await this.syncCapTableFromCompletedPayment(payment);
-
-      this.logger.log(
-        `[AutoMint] Successfully minted on-chain: payment=${payment.id} tx=${mintResult.transactionHash}`,
-      );
-      this.auditLog.create({
-        tenant_id: payment.tenantId ?? 'system',
-        actor_id: payment.userId,
-        actor_role: 'investor',
-        action: 'payment.completed',
-        resource_type: 'payment',
-        resource_id: payment.id,
-        details: { token_id: payment.tokenId, investor_id: payment.userId, amount: payment.tokenAmount, tx: mintResult.transactionHash },
-      }).catch(() => {});
     } catch (mintErr: unknown) {
+      payment.status = PaymentStatus.MINT_REVIEW;
       payment.failureReason = 'Payment confirmed; on-chain mint requires review';
       await this.paymentRepository.save(payment);
       this.logger.error(
         `[AutoMint] Automatic mint failed for payment ${payment.id}: ${(mintErr as Error).message}`,
         (mintErr as Error).stack,
       );
+      return payment;
     }
+
+    payment.status = PaymentStatus.COMPLETED;
+    payment.completedAt = new Date();
+    payment.failureReason = null;
+    payment.metadata = {
+      ...(payment.metadata ?? {}),
+      mint_tx_hash: mintResult.transactionHash,
+      mint_block: mintResult.blockNumber,
+      auto_minted: true,
+      confirmed_at: new Date().toISOString(),
+    };
+    await this.paymentRepository.save(payment);
+    try {
+      await this.syncCapTableFromCompletedPayment(payment);
+    } catch (syncErr) {
+      this.logger.error(
+        `[AutoMint] Mint succeeded but cap-table sync failed for payment ${payment.id}: ${(syncErr as Error).message}`,
+        (syncErr as Error).stack,
+      );
+    }
+
+    this.logger.log(
+      `[AutoMint] Successfully minted on-chain: payment=${payment.id} tx=${mintResult.transactionHash}`,
+    );
+    this.auditLog.create({
+      tenant_id: payment.tenantId ?? 'system',
+      actor_id: payment.userId,
+      actor_role: 'investor',
+      action: 'payment.completed',
+      resource_type: 'payment',
+      resource_id: payment.id,
+      details: { token_id: payment.tokenId, investor_id: payment.userId, amount: payment.tokenAmount, tx: mintResult.transactionHash },
+    }).catch(() => {});
     return payment;
   }
 
@@ -575,6 +587,10 @@ export class PaymentService {
       payment = await this.paymentRepository.findOne({ where: { stripeSessionId: sessionId } });
     } else if (payment.status === PaymentStatus.PAID) {
       payment = await this.executeAutoMint(payment);
+    } else if (payment.status === PaymentStatus.PROCESSING && payment.failureReason) {
+      // Older failed mints were left in PROCESSING; do not retry a possibly broadcast transaction.
+      payment.status = PaymentStatus.MINT_REVIEW;
+      payment = await this.paymentRepository.save(payment);
     }
 
     return payment;

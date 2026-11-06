@@ -15,6 +15,7 @@ interface Payment {
   fiatAmount: string;
   currency: string;
   status: string;
+  failureReason?: string | null;
   createdAt: string;
   stripeSessionId?: string;
 }
@@ -29,11 +30,18 @@ const statusConfig: Record<string, { color: string; icon: typeof CheckCircle }> 
   completed: { color: 'bg-success-100 text-success', icon: CheckCircle },
   paid: { color: 'bg-warning-100 text-warning', icon: Clock },
   processing: { color: 'bg-warning-100 text-warning', icon: Clock },
+  mint_review: { color: 'bg-warning-100 text-warning', icon: Clock },
   pending: { color: 'bg-warning-100 text-warning', icon: Clock },
   cancelled: { color: 'bg-surface-header text-ink', icon: XCircle },
   failed: { color: 'bg-danger-100 text-danger', icon: XCircle },
   expired: { color: 'bg-surface-header text-ink', icon: XCircle },
 };
+
+const displayStatus = (payment: Payment) =>
+  payment.status === 'mint_review' ||
+  (['paid', 'processing'].includes(payment.status) && payment.failureReason)
+    ? 'mint_review'
+    : payment.status;
 
 export default function TransactionsPage() {
   const { user } = useAuthStore();
@@ -55,6 +63,8 @@ export default function TransactionsPage() {
         toast.info('Stripe has not confirmed this payment yet.');
       } else if (updated.status === 'completed') {
         toast.success('Payment confirmed and tokens minted.');
+      } else if (displayStatus(updated) === 'mint_review') {
+        toast.info('Payment confirmed. Token delivery needs review.');
       } else if (updated.status === 'paid' || updated.status === 'processing') {
         toast.info('Payment confirmed. Token minting is still in progress.');
       } else {
@@ -93,7 +103,7 @@ export default function TransactionsPage() {
   }, [user?.id]);
 
   const filtered = payments.filter((p) => {
-    if (filterStatus !== 'all' && p.status !== filterStatus) return false;
+    if (filterStatus !== 'all' && displayStatus(p) !== filterStatus) return false;
     return true;
   });
 
@@ -102,7 +112,7 @@ export default function TransactionsPage() {
     .filter((p) => p.status === 'completed')
     .reduce((s, p) => s + (parseFloat(p.tokenAmount) || 0), 0);
   const totalSpent = payments
-    .filter((p) => ['paid', 'processing', 'completed'].includes(p.status))
+    .filter((p) => ['paid', 'processing', 'mint_review', 'completed'].includes(p.status))
     .reduce((s, p) => s + (parseFloat(p.fiatAmount) || 0), 0);
 
   return (
@@ -157,6 +167,7 @@ export default function TransactionsPage() {
               <option value="all">All Status</option>
               <option value="completed">Completed</option>
               <option value="pending">Pending</option>
+              <option value="mint_review">Mint needs review</option>
               <option value="failed">Failed</option>
             </select>
           </div>
@@ -198,7 +209,8 @@ export default function TransactionsPage() {
               <tbody className="divide-y divide-slate-800/60">
                 {filtered.map((p) => {
                   const token = tokens.find((t) => t.id === p.tokenId);
-                  const config = statusConfig[p.status] || statusConfig.pending;
+                  const shownStatus = displayStatus(p);
+                  const config = statusConfig[shownStatus] || statusConfig.pending;
                   const StatusIcon = config.icon;
                   return (
                     <tr key={p.id} className="hover:bg-surface-header">
@@ -227,11 +239,11 @@ export default function TransactionsPage() {
                       <td className="px-6 py-4">
                         <span className={clsx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium capitalize', config.color)}>
                           <StatusIcon className="h-3 w-3" />
-                          {p.status}
+                          {shownStatus === 'mint_review' ? 'Mint needs review' : p.status}
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        {p.stripeSessionId && ['pending', 'paid', 'processing'].includes(p.status) && (
+                        {p.stripeSessionId && ['pending', 'paid', 'processing', 'mint_review'].includes(p.status) && (
                           <button
                             type="button"
                             onClick={() => void checkPayment(p)}

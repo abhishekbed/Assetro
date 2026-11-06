@@ -95,6 +95,7 @@ interface Payment {
   fiatAmount: string;
   currency?: string;
   status: string;
+  failureReason?: string | null;
   paymentMethod?: string;
   stripeSessionId?: string;
   createdAt: string;
@@ -1593,6 +1594,8 @@ export default function TokenManagementPage() {
                 {tokenPayments.map((p) => {
                   const mintTx = p.metadata?.mint_tx_hash as string | undefined;
                   const mintTxUrl = mintTx ? explorerUrl(activeChainId, 'tx', mintTx) : null;
+                  const needsMintReview = p.status === 'mint_review' ||
+                    (['paid', 'processing'].includes(p.status) && !!p.failureReason);
                   return (
                     <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
                       <td className="px-6 py-4 text-sm text-slate-400">
@@ -1618,11 +1621,12 @@ export default function TokenManagementPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${
+                          needsMintReview ? 'border border-amber-500/30 bg-amber-500/15 text-amber-400' :
                           p.status === 'completed' ? 'border border-emerald-500/30 bg-emerald-500/15 text-emerald-400' :
                           p.status === 'failed' ? 'border border-red-500/30 bg-red-500/15 text-red-400' :
                           p.status === 'processing' ? 'border border-blue-500/30 bg-blue-500/15 text-blue-400' :
                           'border border-amber-500/30 bg-amber-500/15 text-amber-400' }`}>
-                          {p.status}
+                          {needsMintReview ? 'Mint needs review' : p.status}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-xs font-mono">

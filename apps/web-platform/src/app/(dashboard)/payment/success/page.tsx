@@ -3,7 +3,7 @@
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, useRef, Suspense } from 'react';
 import Link from 'next/link';
-import { CheckCircle, XCircle, Loader2, ExternalLink, Wallet } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, ExternalLink, Wallet, Clock } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import api from '@/lib/api';
 import { chainLabel, explorerUrl as chainExplorerUrl } from '@/lib/chains';
@@ -38,9 +38,9 @@ function PaymentSuccessContent() {
   const [tokenDecimals, setTokenDecimals] = useState<number>(18);
   const [tokenChainId, setTokenChainId] = useState<number | null>(null);
 
-  const [pollStatus, setPollStatus] = useState<'polling' | 'paid' | 'done' | 'failed'>('polling');
+  const [pollStatus, setPollStatus] = useState<'polling' | 'paid' | 'review' | 'done' | 'failed'>('polling');
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const statusRef = useRef<'polling' | 'paid' | 'done' | 'failed'>('polling');
+  const statusRef = useRef<'polling' | 'paid' | 'review' | 'done' | 'failed'>('polling');
 
   useEffect(() => {
     if (!/^cs_(test|live)_/.test(sessionId)) {
@@ -56,7 +56,7 @@ function PaymentSuccessContent() {
         const res = await api.get(`/payments/session/${sessionId}`);
         const record: PaymentRecord | null = res.data?.data ?? null;
         if (!record) return;
-        if (statusRef.current === 'done' || statusRef.current === 'failed') return;
+        if (statusRef.current === 'done' || statusRef.current === 'failed' || statusRef.current === 'review') return;
 
         setPayment(record);
 
@@ -64,6 +64,11 @@ function PaymentSuccessContent() {
           if (pollingRef.current) clearInterval(pollingRef.current);
           statusRef.current = 'done';
           setPollStatus('done');
+        } else if (record.status === 'mint_review' ||
+          (['paid', 'processing'].includes(record.status) && record.failureReason)) {
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          statusRef.current = 'review';
+          setPollStatus('review');
         } else if (record.status === 'paid' || record.status === 'processing') {
           // Keep polling while the platform agent mints tokens on-chain
           statusRef.current = 'paid';
@@ -188,24 +193,25 @@ function PaymentSuccessContent() {
     );
   }
 
-  // Payment paid, minting tokens on-chain
-  if (pollStatus === 'paid') {
+  // Payment paid; minting is active or requires manual review.
+  if (pollStatus === 'paid' || pollStatus === 'review') {
+    const needsReview = pollStatus === 'review';
     return (
       <div className="flex min-h-[60vh] items-center justify-center p-4">
         <div className="w-full max-w-md text-center">
           <div className="card p-8 shadow-2xl border border-emerald-500/40 bg-slate-900/90">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
-              <Loader2 className="h-10 w-10 animate-spin" />
+              {needsReview ? <Clock className="h-10 w-10" /> : <Loader2 className="h-10 w-10 animate-spin" />}
             </div>
 
             <h1 className="mb-1 text-2xl font-bold text-white tracking-tight">Payment Successful!</h1>
             <p className="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-3">
-              {payment?.failureReason ? 'On-chain mint needs review' : 'Minting Tokens to Your Wallet…'}
+              {needsReview ? 'On-chain mint needs review' : 'Minting Tokens to Your Wallet…'}
             </p>
 
             <p className="mb-6 text-xs text-slate-300">
-              Your Stripe payment of <strong>${payment?.fiatAmount}</strong> is complete. {payment?.failureReason
-                ? 'Token minting needs review. Your order remains recorded.'
+              Your Stripe payment of <strong>${payment?.fiatAmount}</strong> is complete. {needsReview
+                ? 'Your tokens have not been delivered yet. Your paid order remains recorded for review.'
                 : `Your tokens are now being minted on ${activeChainLabel} to your registered wallet.`}
             </p>
 
@@ -217,7 +223,7 @@ function PaymentSuccessContent() {
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-400">Tokens Being Minted</span>
+                <span className="text-slate-400">{needsReview ? 'Tokens Purchased' : 'Tokens Being Minted'}</span>
                 <span className="font-bold text-emerald-400 text-sm">
                   {payment?.tokenAmount} {payment?.metadata?.token_symbol}
                 </span>
@@ -231,9 +237,14 @@ function PaymentSuccessContent() {
             </div>
 
             <div className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs">
-              <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-              <span>{payment?.failureReason ? 'Your payment is confirmed. The mint is pending review.' : `Confirming on-chain minting on ${activeChainLabel}…`}</span>
+              {needsReview ? <Clock className="h-4 w-4 shrink-0" /> : <Loader2 className="h-4 w-4 animate-spin shrink-0" />}
+              <span>{needsReview ? 'Payment confirmed. Token delivery needs review.' : `Confirming on-chain minting on ${activeChainLabel}…`}</span>
             </div>
+            {needsReview && (
+              <Link href="/transactions" className="btn-primary mt-4 inline-block w-full">
+                View My Order
+              </Link>
+            )}
           </div>
         </div>
       </div>

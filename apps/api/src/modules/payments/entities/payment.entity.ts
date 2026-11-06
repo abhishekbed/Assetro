@@ -11,6 +11,7 @@ export enum PaymentStatus {
   PENDING = 'pending',        // created, not yet paid
   PAID = 'paid',              // payment received (Stripe confirmed) — awaiting issuer mint
   PROCESSING = 'processing',  // mint in progress
+  MINT_REVIEW = 'mint_review', // payment received, mint failed and needs investigation
   COMPLETED = 'completed',    // minted and delivered
   FAILED = 'failed',
   REFUNDED = 'refunded',
