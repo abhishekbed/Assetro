@@ -37,6 +37,8 @@ interface ITREXGateway {
 
     event IRSOwnershipRecovered(address indexed irs, address indexed newOwner);
 
+    event IRSissuershipRecovered(address indexed irs, address indexed newOwner);
+
     function setFactory(address factory) external;
 
     function setPublicDeploymentStatus(bool _isEnabled) external;
