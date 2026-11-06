@@ -32,6 +32,13 @@ const GATEWAY_ABI = [
   'event WalletLinked(address indexed wallet, address indexed identity)',
 ];
 
+interface HttpEventSubscription {
+  contract: ethers.Contract;
+  eventName: string;
+  listener: (...args: any[]) => void;
+  nextBlock: number | null;
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 /**
@@ -62,7 +69,15 @@ export class ContractEventListenerService
   private readonly identityContracts = new Map<string, ethers.Contract>();
   private gatewayContract: ethers.Contract | null = null;
   private refreshInterval: NodeJS.Timeout | null = null;
+  private httpPollInterval: NodeJS.Timeout | null = null;
+  private readonly httpSubscriptions: HttpEventSubscription[] = [];
+  private latestObservedBlock: number | null = null;
+  private httpPollInProgress = false;
+  private httpPollFailures = 0;
+  private nextHttpPollAt = 0;
   private readonly REFRESH_MS = 5 * 60 * 1000; // re-scan for new contracts every 5 min
+  private readonly HTTP_POLL_MS = 30 * 1000;
+  private readonly MAX_BLOCK_RANGE = 100;
 
   constructor(
     @InjectRepository(OnchainIdentity)
@@ -97,6 +112,13 @@ export class ContractEventListenerService
 
     await this.refreshSubscriptions();
 
+    if (this.provider instanceof ethers.JsonRpcProvider) {
+      this.httpPollInterval = setInterval(() => {
+        void this.pollHttpEvents();
+      }, this.HTTP_POLL_MS);
+      await this.pollHttpEvents();
+    }
+
     this.refreshInterval = setInterval(() => {
       this.refreshSubscriptions().catch((err: Error) =>
         this.logger.error(`[Events] Subscription refresh failed: ${err.message}`, err.stack),
@@ -109,6 +131,11 @@ export class ContractEventListenerService
       clearInterval(this.refreshInterval);
       this.refreshInterval = null;
     }
+    if (this.httpPollInterval) {
+      clearInterval(this.httpPollInterval);
+      this.httpPollInterval = null;
+    }
+    this.httpSubscriptions.length = 0;
     if (this.gatewayContract) await this.gatewayContract.removeAllListeners();
     for (const c of this.irContracts.values()) await c.removeAllListeners();
     for (const c of this.identityContracts.values()) await c.removeAllListeners();
@@ -141,6 +168,85 @@ export class ContractEventListenerService
         : new ethers.JsonRpcProvider(rpcUrl, undefined, { staticNetwork: true, polling: true });
     }
     return this.provider;
+  }
+
+  private listenForEvent(
+    contract: ethers.Contract,
+    eventName: string,
+    listener: (...args: any[]) => void,
+  ): void {
+    if (this.provider instanceof ethers.JsonRpcProvider) {
+      this.httpSubscriptions.push({
+        contract,
+        eventName,
+        listener,
+        nextBlock: this.latestObservedBlock,
+      });
+      return;
+    }
+
+    void contract.on(eventName, listener).catch((err: Error) =>
+      this.logger.error(`[Events] ${eventName} subscription failed: ${err.message}`, err.stack),
+    );
+  }
+
+  private async pollHttpEvents(): Promise<void> {
+    if (
+      !(this.provider instanceof ethers.JsonRpcProvider) ||
+      this.httpPollInProgress ||
+      this.httpSubscriptions.length === 0 ||
+      Date.now() < this.nextHttpPollAt
+    ) return;
+
+    this.httpPollInProgress = true;
+    try {
+      const latestBlock = await this.provider.getBlockNumber();
+      this.latestObservedBlock = latestBlock;
+
+      for (const subscription of this.httpSubscriptions) {
+        if (subscription.nextBlock === null) subscription.nextBlock = latestBlock;
+        if (subscription.nextBlock > latestBlock) continue;
+
+        const toBlock = Math.min(
+          latestBlock,
+          subscription.nextBlock + this.MAX_BLOCK_RANGE - 1,
+        );
+        const logs = await subscription.contract.queryFilter(
+          subscription.eventName,
+          subscription.nextBlock,
+          toBlock,
+        );
+
+        for (const log of logs) {
+          if (!(log instanceof ethers.EventLog)) continue;
+          try {
+            subscription.listener(...log.args, log);
+          } catch (err) {
+            this.logger.error(
+              `[Events] ${subscription.eventName} handler failed: ${(err as Error).message}`,
+            );
+          }
+        }
+
+        // Advance only after getLogs succeeds, so throttling cannot skip events.
+        subscription.nextBlock = toBlock + 1;
+      }
+
+      this.httpPollFailures = 0;
+      this.nextHttpPollAt = 0;
+    } catch (err) {
+      this.httpPollFailures += 1;
+      const retryMs = Math.min(
+        2 * 60 * 1000,
+        this.HTTP_POLL_MS * 2 ** Math.min(this.httpPollFailures - 1, 2),
+      );
+      this.nextHttpPollAt = Date.now() + retryMs;
+      this.logger.warn(
+        `[Events] RPC log poll failed: ${(err as Error).message}. Retrying in ${retryMs / 1000}s`,
+      );
+    } finally {
+      this.httpPollInProgress = false;
+    }
   }
 
   // ── Subscription management ───────────────────────────────────────────────
@@ -193,7 +299,8 @@ export class ContractEventListenerService
     const contract = new ethers.Contract(irAddress, IR_ABI, provider);
     this.irContracts.set(irAddress, contract);
 
-    contract.on(
+    this.listenForEvent(
+      contract,
       'IdentityRegistered',
       (
         investorAddress: string,
@@ -217,7 +324,8 @@ export class ContractEventListenerService
       },
     );
 
-    contract.on(
+    this.listenForEvent(
+      contract,
       'IdentityRemoved',
       (investorAddress: string, event: ethers.EventLog) => {
         this.logger.log(
@@ -243,7 +351,8 @@ export class ContractEventListenerService
     const contract = new ethers.Contract(identityAddress, IDENTITY_ABI, provider);
     this.identityContracts.set(identityAddress, contract);
 
-    contract.on(
+    this.listenForEvent(
+      contract,
       'ClaimAdded',
       (
         claimId: string,
@@ -274,7 +383,8 @@ export class ContractEventListenerService
       },
     );
 
-    contract.on(
+    this.listenForEvent(
+      contract,
       'ClaimRemoved',
       (claimId: string, topic: bigint, event: ethers.EventLog) => {
         const topicNum = Number(topic);
@@ -299,7 +409,8 @@ export class ContractEventListenerService
   ): void {
     this.gatewayContract = new ethers.Contract(gatewayAddress, GATEWAY_ABI, provider);
 
-    this.gatewayContract.on(
+    this.listenForEvent(
+      this.gatewayContract,
       'WalletLinked',
       (wallet: string, identity: string, event: ethers.EventLog) => {
         this.logger.log(
