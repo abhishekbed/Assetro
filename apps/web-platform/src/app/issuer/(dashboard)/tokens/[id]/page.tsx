@@ -365,7 +365,7 @@ export default function TokenManagementPage() {
 
       if (!resolvedGatewayAddress) {
         throw new Error(
-          `TREXGateway address is not configured for chain ${targetChainId}. Set NEXT_PUBLIC_TREX_GATEWAY_ADDRESS_${targetChainId} in the root .env.local file and restart web-platform.`,
+          `TREXGateway address is not configured for chain ${targetChainId}. Set NEXT_PUBLIC_TREX_GATEWAY_ADDRESS_${targetChainId} in the web-platform environment and rebuild.`,
         );
       }
 

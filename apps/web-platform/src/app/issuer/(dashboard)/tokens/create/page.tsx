@@ -49,7 +49,7 @@ const chainOptions = [
   {
     id: 'arc-testnet',
     name: 'Arc Testnet',
-    desc: 'USDC gas · configured in your local environment',
+    desc: 'USDC gas · Arc Testnet',
   },
   {
     id: 'sepolia',
@@ -59,19 +59,29 @@ const chainOptions = [
   {
     id: 'ethereum',
     name: 'Ethereum',
-    desc: 'Requires a mainnet factory address',
+    desc: 'Requires a mainnet gateway address',
   },
   {
     id: 'polygon',
     name: 'Polygon',
-    desc: 'Requires a Polygon factory address',
+    desc: 'Requires a Polygon gateway address',
   },
   {
     id: 'bharat',
     name: 'Bharat Chain',
-    desc: 'Requires a Bharat factory address',
+    desc: 'Requires a Bharat gateway address',
   },
 ] as const;
+
+function getInitialBlockchain(): string {
+  const defaultChainId = Number(process.env.NEXT_PUBLIC_DEFAULT_CHAIN_ID || '11155111');
+  const preferred = chainOptions.find(
+    (chain) => chainIdMap[chain.id] === defaultChainId && getTREXGatewayAddress(defaultChainId),
+  );
+  return preferred?.id ||
+    chainOptions.find((chain) => getTREXGatewayAddress(chainIdMap[chain.id]))?.id ||
+    '';
+}
 
 function normalizeTotalSupply(value: string): string | null {
   const input = value.trim().replace(/,/g, '');
@@ -211,7 +221,7 @@ export default function CreateTokenPage() {
     geoRestrictions: [],
     maxHolders: '',
     transferRestrictions: true,
-    blockchain: process.env.NEXT_PUBLIC_DEFAULT_CHAIN_ID === '5042002' ? 'arc-testnet' : 'sepolia',
+    blockchain: getInitialBlockchain(),
     standard: 'ERC-3643',
     logoUrl: '',
     nanocDocUrl: '',
@@ -437,6 +447,10 @@ export default function CreateTokenPage() {
     if (!formData.blockchain || !chainIdMap[formData.blockchain]) {
       setCurrentStep(4);
       return 'Select a blockchain network.';
+    }
+    if (!getTREXGatewayAddress(chainIdMap[formData.blockchain])) {
+      setCurrentStep(4);
+      return 'This network needs a configured TREX gateway address before token submission.';
     }
 
     return null;
@@ -1228,19 +1242,19 @@ export default function CreateTokenPage() {
                   className={`rounded-lg border-2 p-4 text-left transition-colors ${
  formData.blockchain === chain.id
  ? 'border-blue-500 bg-blue-500/10' : 'border-slate-800 bg-slate-900/60 hover:border-slate-700' } ${!isConfigured ? 'cursor-not-allowed opacity-50' : ''}`}
-                  title={!isConfigured ? 'Factory address not configured for this network' : undefined}
+                  title={!isConfigured ? 'TREX gateway address not configured for this network' : undefined}
                 >
                   <p className="font-semibold text-ink">{chain.name}</p>
                   <p className="text-sm text-slate-400">{chain.desc}</p>
                   <p className={`mt-2 text-xs font-medium ${isConfigured ? 'text-emerald-400' : 'text-amber-400'}`}>
-                    {isConfigured ? 'Factory configured' : 'Factory not configured'}
+                    {isConfigured ? 'Gateway configured' : 'Gateway not configured'}
                   </p>
                 </button>
                 );
               })}
             </div>
             <p className="text-xs text-slate-400">
-              Networks with a configured gateway in your local environment are available for deployment.
+              Networks with a configured TREX gateway in this deployment are available for token creation.
             </p>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-300">Token Standard</label>

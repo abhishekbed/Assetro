@@ -3,6 +3,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ServiceUnavailableException,
   Inject,
   forwardRef,
 } from '@nestjs/common';
@@ -32,6 +33,36 @@ export interface PaginatedResult<T> {
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
+
+  private getInvestorBaseUrl(): string {
+    const production = this.configService.get<string>('NODE_ENV') === 'production';
+    const candidates = [
+      this.configService.get<string>('NEXT_PUBLIC_INVESTOR_URL'),
+      this.configService.get<string>('APP_BASE_URL'),
+    ];
+
+    for (const candidate of candidates) {
+      if (!candidate?.trim()) continue;
+      try {
+        const url = new URL(candidate.trim());
+        if (production && (
+          url.protocol !== 'https:' ||
+          ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname.toLowerCase())
+        )) continue;
+        if (!['http:', 'https:'].includes(url.protocol)) continue;
+        return url.origin;
+      } catch {
+        // Try the next configured URL.
+      }
+    }
+
+    if (production) {
+      throw new ServiceUnavailableException(
+        'Investor return URL is not configured. Set NEXT_PUBLIC_INVESTOR_URL to the investor site URL.',
+      );
+    }
+    return 'http://localhost:3001';
+  }
 
   constructor(
     @InjectRepository(Payment)
@@ -204,10 +235,7 @@ export class PaymentService {
     const pricePerToken = await this.getTokenPrice(dto.token_id);
     const fiatAmount = tokenAmount * pricePerToken;
 
-    const investorUrl = this.configService.get<string>(
-      'NEXT_PUBLIC_INVESTOR_URL',
-      'http://localhost:3001',
-    );
+    const investorUrl = this.getInvestorBaseUrl();
 
     const session = await this.stripeService.createCheckoutSession({
       lineItems: [

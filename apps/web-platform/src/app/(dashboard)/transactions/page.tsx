@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Filter, Download, Loader2, ShoppingCart, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { Filter, Download, Loader2, ShoppingCart, CheckCircle, Clock, XCircle, RefreshCw } from 'lucide-react';
 import clsx from 'clsx';
+import { toast } from 'sonner';
 import { useAuthStore } from '@/store/auth.store';
 import api from '@/lib/api';
 
@@ -26,7 +27,10 @@ interface Token {
 
 const statusConfig: Record<string, { color: string; icon: typeof CheckCircle }> = {
   completed: { color: 'bg-success-100 text-success', icon: CheckCircle },
+  paid: { color: 'bg-warning-100 text-warning', icon: Clock },
+  processing: { color: 'bg-warning-100 text-warning', icon: Clock },
   pending: { color: 'bg-warning-100 text-warning', icon: Clock },
+  cancelled: { color: 'bg-surface-header text-ink', icon: XCircle },
   failed: { color: 'bg-danger-100 text-danger', icon: XCircle },
   expired: { color: 'bg-surface-header text-ink', icon: XCircle },
 };
@@ -37,6 +41,32 @@ export default function TransactionsPage() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
+  const [checkingPaymentId, setCheckingPaymentId] = useState<string | null>(null);
+
+  const checkPayment = async (payment: Payment) => {
+    if (!payment.stripeSessionId) return;
+    setCheckingPaymentId(payment.id);
+    try {
+      const response = await api.get(`/payments/session/${encodeURIComponent(payment.stripeSessionId)}`);
+      const updated = response.data?.data as Payment | null;
+      if (!updated) throw new Error('Payment record was not found.');
+      setPayments((current) => current.map((item) => item.id === updated.id ? updated : item));
+      if (updated.status === 'pending') {
+        toast.info('Stripe has not confirmed this payment yet.');
+      } else if (updated.status === 'completed') {
+        toast.success('Payment confirmed and tokens minted.');
+      } else if (updated.status === 'paid' || updated.status === 'processing') {
+        toast.info('Payment confirmed. Token minting is still in progress.');
+      } else {
+        toast.info(`Payment status: ${updated.status}`);
+      }
+    } catch (error) {
+      const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message;
+      toast.error(message || 'Could not check this payment. Please try again.');
+    } finally {
+      setCheckingPaymentId(null);
+    }
+  };
 
   useEffect(() => {
     async function fetchData() {
@@ -69,10 +99,10 @@ export default function TransactionsPage() {
 
   const totalOrders = payments.length;
   const totalTokensBought = payments
-    .filter((p) => p.status === 'completed' || p.status === 'pending')
+    .filter((p) => p.status === 'completed')
     .reduce((s, p) => s + (parseFloat(p.tokenAmount) || 0), 0);
   const totalSpent = payments
-    .filter((p) => p.status === 'completed' || p.status === 'pending')
+    .filter((p) => ['paid', 'processing', 'completed'].includes(p.status))
     .reduce((s, p) => s + (parseFloat(p.fiatAmount) || 0), 0);
 
   return (
@@ -100,7 +130,7 @@ export default function TransactionsPage() {
           <p className="mt-1 text-2xl font-bold text-ink">{totalOrders}</p>
         </div>
         <div className="card p-5">
-          <p className="text-sm text-muted">Tokens Bought</p>
+          <p className="text-sm text-muted">Tokens Received</p>
           <p className="mt-1 text-2xl font-bold text-ink">
             {totalTokensBought.toLocaleString('en-US')}
           </p>
@@ -162,6 +192,7 @@ export default function TransactionsPage() {
                   <th className="px-6 py-3 text-right text-xs font-medium uppercase text-muted">Amount</th>
                   <th className="px-6 py-3 text-right text-xs font-medium uppercase text-muted">Value</th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -198,6 +229,19 @@ export default function TransactionsPage() {
                           <StatusIcon className="h-3 w-3" />
                           {p.status}
                         </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {p.stripeSessionId && ['pending', 'paid', 'processing'].includes(p.status) && (
+                          <button
+                            type="button"
+                            onClick={() => void checkPayment(p)}
+                            disabled={checkingPaymentId === p.id}
+                            className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline disabled:opacity-50"
+                          >
+                            <RefreshCw className={clsx('h-3.5 w-3.5', checkingPaymentId === p.id && 'animate-spin')} />
+                            Check payment
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
