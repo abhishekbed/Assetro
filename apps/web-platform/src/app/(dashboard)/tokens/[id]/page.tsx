@@ -107,7 +107,6 @@ export default function TokenDetailPage() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [buyAmount, setBuyAmount] = useState('');
   const [buyLoading, setBuyLoading] = useState(false);
-  const [showDemoCheckout, setShowDemoCheckout] = useState(false);
   const [requestingIssuer, setRequestingIssuer] = useState(false);
   const [buyError, setBuyError] = useState<string | null>(null);
   const [position, setPosition] = useState<InvestorPosition | null>(null);
@@ -384,7 +383,7 @@ export default function TokenDetailPage() {
     }
   };
 
-  const handleBuy = () => {
+  const handleBuy = async () => {
     if (!buyAmount || buyAmount.trim() === '') {
       const msg = `Please enter the number of tokens to purchase (minimum ${minInvestment} tokens).`;
       setBuyError(msg);
@@ -428,12 +427,6 @@ export default function TokenDetailPage() {
       return;
     }
 
-    setBuyError(null);
-    setShowDemoCheckout(true);
-  };
-
-  const confirmDemoPurchase = async () => {
-    if (!user?.id || !address || buyLoading) return;
     setBuyLoading(true);
     setBuyError(null);
     try {
@@ -443,7 +436,7 @@ export default function TokenDetailPage() {
         // Non-blocking sync
       }
 
-      await api.post('/payments/demo-purchase', {
+      const response = await api.post('/payments/checkout', {
         token_id: id,
         token_amount: buyAmount,
         currency: 'USD',
@@ -453,10 +446,16 @@ export default function TokenDetailPage() {
           'x-user-id': user.id,
         },
       });
-      window.location.assign('/transactions');
+      const data = response.data?.data || response.data;
+      const sessionUrl = data?.sessionUrl || data?.checkoutUrl || data?.url;
+      const checkoutUrl = sessionUrl ? new URL(sessionUrl) : null;
+      if (!checkoutUrl || checkoutUrl.protocol !== 'https:' || checkoutUrl.hostname !== 'checkout.stripe.com') {
+        throw new Error('Stripe Checkout did not return a secure payment page. No purchase was completed.');
+      }
+      window.location.assign(checkoutUrl.toString());
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } }; message?: string };
-      const message = axiosErr.response?.data?.message || axiosErr.message || 'Could not complete demo purchase. Please try again.';
+      const message = axiosErr.response?.data?.message || axiosErr.message || 'Payment service not available yet. Please try again later.';
       setBuyError(message);
       toast.error(message);
     } finally {
@@ -1212,32 +1211,6 @@ export default function TokenDetailPage() {
           </div>
         </div>
       </div>
-
-      {showDemoCheckout && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="presentation">
-          <div role="dialog" aria-modal="true" aria-labelledby="demo-checkout-title" className="card w-full max-w-md space-y-5 p-6 shadow-2xl">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-accent">Demo checkout</p>
-              <h2 id="demo-checkout-title" className="mt-1 text-xl font-bold text-ink">Review token purchase</h2>
-              <p className="mt-2 text-sm text-muted">This is a simulated purchase. No card is charged and no money is collected.</p>
-            </div>
-            <dl className="tile space-y-3 text-sm">
-              <div className="flex justify-between gap-4"><dt className="text-muted">Token</dt><dd className="font-semibold text-ink">{token.name} ({token.symbol})</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-muted">Quantity</dt><dd className="font-semibold text-ink">{buyAmount} {token.symbol}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-muted">Simulated total</dt><dd className="font-semibold text-ink">${estimatedCost}</dd></div>
-              <div className="border-t border-line pt-3"><dt className="text-muted">Destination wallet</dt><dd className="mt-1 break-all font-mono text-xs text-ink">{address}</dd></div>
-            </dl>
-            <p className="text-xs text-muted">Continue to create a demo transaction and mint testnet tokens to this wallet.</p>
-            {buyError && <p className="text-sm text-danger" role="alert">{buyError}</p>}
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setShowDemoCheckout(false)} disabled={buyLoading} className="btn-secondary flex-1">Cancel</button>
-              <button type="button" onClick={confirmDemoPurchase} disabled={buyLoading} className="btn-primary flex-1">
-                {buyLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing…</> : 'Continue'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

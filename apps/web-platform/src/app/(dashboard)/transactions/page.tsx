@@ -17,7 +17,6 @@ interface Payment {
   status: string;
   createdAt: string;
   stripeSessionId?: string;
-  metadata?: { demo_mode?: boolean } | null;
 }
 
 interface Token {
@@ -223,14 +222,12 @@ export default function TransactionsPage() {
                         {parseFloat(p.tokenAmount).toLocaleString('en-US')} tokens
                       </td>
                       <td className="px-6 py-4 text-right text-sm font-medium text-ink">
-                        {p.metadata?.demo_mode
-                          ? 'Demo · $0 collected'
-                          : `$${parseFloat(p.fiatAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+                        ${parseFloat(p.fiatAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="px-6 py-4">
                         <span className={clsx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium capitalize', config.color)}>
                           <StatusIcon className="h-3 w-3" />
-                          {p.metadata?.demo_mode ? `Demo ${p.status}` : p.status}
+                          {p.status}
                         </span>
                       </td>
                       <td className="px-6 py-4">
