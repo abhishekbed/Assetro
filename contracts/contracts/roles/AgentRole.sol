@@ -11,6 +11,9 @@ contract AgentRole is Ownable {
 
     Roles.Role private _agents;
 
+
+    Uint256 _Value;
+
     event AgentAdded(address indexed _agent);
     event AgentRemoved(address indexed _agent);
 
