@@ -37,7 +37,4 @@ contract ClaimTopicsRegistry is IClaimTopicsRegistry, OwnableUpgradeable, CTRSto
         return _claimTopics;
     }
 
-    function getClaimTopic() external view override returns (uint256[] memory) {
-        return _claimTopics;
-    }
 }
