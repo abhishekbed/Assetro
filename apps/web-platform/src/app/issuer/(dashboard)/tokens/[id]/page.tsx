@@ -100,6 +100,7 @@ interface Payment {
   createdAt: string;
   metadata?: {
     wallet_address?: string;
+    demo_mode?: boolean;
     [key: string]: unknown;
   } | null;
 }
@@ -1614,7 +1615,9 @@ export default function TokenManagementPage() {
                         {parseFloat(p.tokenAmount).toLocaleString('en-US')}
                       </td>
                       <td className="px-6 py-4 text-right text-sm font-bold text-ink">
-                        ${parseFloat(p.fiatAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        {p.metadata?.demo_mode
+                          ? 'Demo · $0 collected'
+                          : `$${parseFloat(p.fiatAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${
@@ -1622,7 +1625,7 @@ export default function TokenManagementPage() {
                           p.status === 'failed' ? 'border border-red-500/30 bg-red-500/15 text-red-400' :
                           p.status === 'processing' ? 'border border-blue-500/30 bg-blue-500/15 text-blue-400' :
                           'border border-amber-500/30 bg-amber-500/15 text-amber-400' }`}>
-                          {p.status}
+                          {p.metadata?.demo_mode ? `Demo ${p.status}` : p.status}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-xs font-mono">

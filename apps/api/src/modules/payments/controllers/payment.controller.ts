@@ -45,6 +45,16 @@ export class PaymentController {
     return this.paymentService.createCheckout(userId, dto, tenantId);
   }
 
+  @Roles(UserRole.INVESTOR)
+  @Post('demo-purchase')
+  async createDemoPurchase(
+    @Body() dto: CreateCheckoutDto,
+    @Headers('x-user-id') userId: string,
+  ) {
+    if (!userId) throw new BadRequestException('x-user-id header is required');
+    return this.paymentService.createDemoPurchase(userId, dto);
+  }
+
   @Get('history')
   async getPaymentHistory(
     @Headers('x-user-id') userId: string,
