@@ -111,16 +111,6 @@ function PaymentSuccessContent() {
     }
   }, [payment?.tokenId]);
 
-  useEffect(() => {
-    if (pollStatus !== 'done' || !/^cs_(test|live)_/.test(sessionId)) return;
-    if (window.opener && !window.opener.closed) {
-      window.opener.postMessage({ type: 'assetro:checkout-complete', sessionId }, window.location.origin);
-      window.close();
-    }
-  }, [pollStatus, sessionId]);
-
-
-
   const addTokenToMetaMask = async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const eth = typeof window !== 'undefined' ? (window as any).ethereum : null;

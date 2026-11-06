@@ -120,17 +120,6 @@ export default function TokenDetailPage() {
   });
 
   useEffect(() => {
-    const handleCheckoutComplete = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      const message = event.data as { type?: string; sessionId?: string } | null;
-      if (message?.type !== 'assetro:checkout-complete' || !message.sessionId?.startsWith('cs_')) return;
-      window.location.assign(`/payment/success?session_id=${encodeURIComponent(message.sessionId)}`);
-    };
-    window.addEventListener('message', handleCheckoutComplete);
-    return () => window.removeEventListener('message', handleCheckoutComplete);
-  }, []);
-
-  useEffect(() => {
     const fetchToken = async () => {
       try {
         setError(null);
@@ -438,8 +427,6 @@ export default function TokenDetailPage() {
       return;
     }
 
-    const checkoutWindow = window.open('', '_blank', 'popup=yes,width=600,height=800');
-    checkoutWindow?.focus();
     setBuyLoading(true);
     setBuyError(null);
     try {
@@ -465,14 +452,8 @@ export default function TokenDetailPage() {
       if (!checkoutUrl || checkoutUrl.protocol !== 'https:' || checkoutUrl.hostname !== 'checkout.stripe.com') {
         throw new Error('Stripe Checkout did not return a secure payment page. No purchase was completed.');
       }
-      if (checkoutWindow && !checkoutWindow.closed) {
-        checkoutWindow.location.assign(checkoutUrl.toString());
-        toast.info('Complete your payment in the Stripe Checkout window.');
-      } else {
-        window.location.assign(checkoutUrl.toString());
-      }
+      window.location.assign(checkoutUrl.toString());
     } catch (err: unknown) {
-      if (checkoutWindow && !checkoutWindow.closed) checkoutWindow.close();
       const axiosErr = err as { response?: { data?: { message?: string } }; message?: string };
       const message = axiosErr.response?.data?.message || axiosErr.message || 'Payment service not available yet. Please try again later.';
       setBuyError(message);
